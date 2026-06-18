@@ -104,4 +104,4 @@ dotnet build src/NotifyHubVr
 dotnet run --project tests/NotifyHubVr.Tests
 ```
 
-The current tests cover notification normalization, config loading, replacement behavior, and auto-hide behavior.
+The current tests cover notification normalization, config loading, replacement behavior, auto-hide behavior, and HTTP endpoint behavior.

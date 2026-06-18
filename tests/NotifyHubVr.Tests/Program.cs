@@ -1,4 +1,11 @@
 using NotifyHubVr;
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 var tests = new (string Name, Func<Task> Run)[]
 {
@@ -7,6 +14,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("NotificationDisplayService replaces visible notification", TestReplaceVisibleNotification),
     ("NotificationDisplayService hides after duration", TestHideAfterDuration),
     ("AppConfig.Load reads snake_case config", TestLoadConfig),
+    ("HTTP POST /notify updates debug state", TestHttpNotifyEndpoint),
 };
 
 var failures = 0;
@@ -135,6 +143,49 @@ static Task TestLoadConfig()
     }
 
     return Task.CompletedTask;
+}
+
+static async Task TestHttpNotifyEndpoint()
+{
+    var config = new AppConfig
+    {
+        BindAddress = "127.0.0.1",
+        Port = 0,
+        DefaultDurationMs = 10_000,
+    };
+
+    var renderer = new RecordingRenderer();
+    var builder = NotifyHubWebApplication.CreateBuilder([], config);
+    builder.Logging.ClearProviders();
+    builder.Services.RemoveAll<INotificationRenderer>();
+    builder.Services.AddSingleton<INotificationRenderer>(renderer);
+    builder.WebHost.UseUrls("http://127.0.0.1:0");
+
+    await using var app = NotifyHubWebApplication.Build(builder);
+    await app.StartAsync();
+
+    var address = app.Urls.Single();
+    using var client = new HttpClient
+    {
+        BaseAddress = new Uri(address),
+    };
+
+    var response = await client.PostAsJsonAsync("/notify", new
+    {
+        body = "http test",
+        duration_ms = 10_000,
+    });
+
+    AssertEqual(HttpStatusCode.Accepted, response.StatusCode, "POST /notify should accept valid payload");
+
+    using var stateJson = JsonDocument.Parse(await client.GetStringAsync("/state"));
+    var current = stateJson.RootElement.GetProperty("current");
+
+    AssertEqual("http test", current.GetProperty("body").GetString(), "GET /state should expose current notification body");
+    AssertEqual(10_000, current.GetProperty("duration_ms").GetInt32(), "GET /state should expose current notification duration");
+    AssertSequenceEqual(new[] { "show:http test" }, renderer.Events, "HTTP endpoint should render notification");
+
+    await app.StopAsync();
 }
 
 static void AssertEqual<T>(T expected, T actual, string message)
