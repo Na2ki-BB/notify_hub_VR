@@ -11,8 +11,7 @@ The first implementation stage is a C#/.NET companion app with:
 - JSON notification payload.
 - Replace-current-notification behavior.
 - Console preview renderer.
-
-SteamVR/OpenVR overlay rendering is the next stage after the receiver is verified on Windows.
+- SteamVR/OpenVR overlay renderer with Windows GDI text texture rendering.
 
 ## Windows Setup
 
@@ -95,7 +94,7 @@ Example:
 
 ## Next Step
 
-Add actual notification text rendering to `OpenVrNotificationRenderer`. The current `openvr` renderer creates a fixed-color debug overlay.
+Tune the OpenVR overlay placement, size, and typography after headset testing. The current `openvr` renderer draws notification text into a Windows GDI bitmap and submits it with `SetOverlayRaw`.
 
 ## OpenVR Probe
 
@@ -110,18 +109,15 @@ dotnet run -- config.openvr.json
 Then send a normal notification:
 
 ```powershell
-curl.exe -X POST http://localhost:17890/notify `
-  -H "Content-Type: application/json" `
-  -d "{\"body\":\"openvr probe\"}"
+$body = @{ body = "openvr probe" } | ConvertTo-Json
+Invoke-RestMethod -Uri "http://localhost:17890/notify" -Method Post -ContentType "application/json" -Body $body
 ```
 
 Expected current behavior:
 
 - On Linux, `renderer=openvr` fails with a clear platform error.
 - On Windows without SteamVR/OpenVR available, it fails with a clear OpenVR runtime or DLL error.
-- On Windows with SteamVR available, it initializes OpenVR and logs that the notification reached the OpenVR renderer.
-
-A fixed-color VR overlay is expected at this stage. Rendering the actual notification text into the overlay is the next implementation step.
+- On Windows with SteamVR available and an HMD connected, it initializes OpenVR and displays the notification text in a head-locked overlay.
 
 ## Tests
 

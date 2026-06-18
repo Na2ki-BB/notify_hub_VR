@@ -151,9 +151,8 @@ dotnet run -- config.openvr.json
 別のPowerShellで:
 
 ```powershell
-curl.exe -X POST http://localhost:17890/notify `
-  -H "Content-Type: application/json" `
-  -d "{\"body\":\"openvr probe\"}"
+$body = @{ body = "openvr probe" } | ConvertTo-Json
+Invoke-RestMethod -Uri "http://localhost:17890/notify" -Method Post -ContentType "application/json" -Body $body
 ```
 
 期待する結果:
@@ -161,9 +160,9 @@ curl.exe -X POST http://localhost:17890/notify `
 - `OpenVR renderer accepted notification.`
 - `SteamVR runtime installed: True`
 - `HMD present: True` または `False`
-- HMD内の視界右上付近に、固定色の小さなdebug overlayが見える
+- HMD内の視界右上付近に、通知テキスト入りのoverlayが見える
 
-`HMD present: False` でも、SteamVR runtime初期化まで通っていれば一部確認はできています。ただしdebug overlayの表示確認はHMD接続中に行います。
+`HMD present: False` でも、SteamVR runtime初期化まで通っていれば一部確認はできています。ただしoverlay表示確認はHMD接続中に行います。
 
 ## 8. よくあるエラー
 

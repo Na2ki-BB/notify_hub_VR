@@ -1,20 +1,26 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 namespace NotifyHubVr;
 
 public sealed class OpenVrNotificationRenderer : INotificationRenderer, IDisposable
 {
-    private readonly OpenVrSession _session = new();
+    private readonly OpenVrSession _session;
+
+    public OpenVrNotificationRenderer(AppConfig config)
+    {
+        _session = new OpenVrSession(OpenVrOverlaySettings.FromConfig(config));
+    }
 
     public Task ShowAsync(NotificationMessage message, CancellationToken cancellationToken)
     {
         var status = _session.EnsureInitialized();
-        _session.ShowDebugOverlay();
+        _session.ShowNotification(message);
 
         Console.WriteLine("OpenVR renderer accepted notification.");
         Console.WriteLine($"SteamVR runtime installed: {status.RuntimeInstalled}");
         Console.WriteLine($"HMD present: {status.HmdPresent}");
-        Console.WriteLine("A fixed-color OpenVR overlay should now be visible near the upper-right of the headset view.");
+        Console.WriteLine("A text OpenVR overlay should now be visible in the headset view.");
         if (!string.IsNullOrWhiteSpace(message.Title))
         {
             Console.WriteLine(message.Title);
@@ -42,9 +48,15 @@ internal sealed class OpenVrSession : IDisposable
     private const string OverlayKey = "notify_hub_vr.notification";
     private const string OverlayName = "Notify Hub VR";
 
+    private readonly OpenVrOverlaySettings _settings;
     private bool _initialized;
     private ulong _overlayHandle;
     private OpenVrProbeStatus? _lastStatus;
+
+    public OpenVrSession(OpenVrOverlaySettings settings)
+    {
+        _settings = settings;
+    }
 
     public OpenVrProbeStatus EnsureInitialized()
     {
@@ -104,10 +116,10 @@ internal sealed class OpenVrSession : IDisposable
         }
     }
 
-    public void ShowDebugOverlay()
+    public void ShowNotification(NotificationMessage message)
     {
         EnsureInitialized();
-        UpdateDebugTexture();
+        UpdateNotificationTexture(message);
         ThrowIfOverlayError(GetOverlay().ShowOverlay(_overlayHandle), "ShowOverlay");
     }
 
@@ -159,10 +171,10 @@ internal sealed class OpenVrSession : IDisposable
             _overlayHandle = handle;
         }
 
-        ThrowIfOverlayError(GetOverlay().SetOverlayWidthInMeters(_overlayHandle, 0.45f), "SetOverlayWidthInMeters");
+        ThrowIfOverlayError(GetOverlay().SetOverlayWidthInMeters(_overlayHandle, 0.55f), "SetOverlayWidthInMeters");
         ThrowIfOverlayError(GetOverlay().SetOverlayAlpha(_overlayHandle, 0.92f), "SetOverlayAlpha");
 
-        var transform = CreateHeadLockedTransform();
+        var transform = CreateHeadLockedTransform(_settings.Position);
         ThrowIfOverlayError(
             GetOverlay().SetOverlayTransformTrackedDeviceRelative(
                 _overlayHandle,
@@ -171,45 +183,49 @@ internal sealed class OpenVrSession : IDisposable
             "SetOverlayTransformTrackedDeviceRelative");
     }
 
-    private static Valve.VR.HmdMatrix34_t CreateHeadLockedTransform()
+    private static Valve.VR.HmdMatrix34_t CreateHeadLockedTransform(string position)
     {
+        var x = position.Contains("left", StringComparison.OrdinalIgnoreCase)
+            ? -0.38f
+            : position.Contains("right", StringComparison.OrdinalIgnoreCase) ? 0.38f : 0f;
+        var y = position.Contains("lower", StringComparison.OrdinalIgnoreCase)
+            || position.Contains("bottom", StringComparison.OrdinalIgnoreCase)
+            ? -0.22f
+            : position.Contains("upper", StringComparison.OrdinalIgnoreCase)
+            || position.Contains("top", StringComparison.OrdinalIgnoreCase) ? 0.22f : 0f;
+
         return new Valve.VR.HmdMatrix34_t
         {
-            m0 = 1, m1 = 0, m2 = 0, m3 = 0.38f,
-            m4 = 0, m5 = 1, m6 = 0, m7 = 0.22f,
+            m0 = 1, m1 = 0, m2 = 0, m3 = x,
+            m4 = 0, m5 = 1, m6 = 0, m7 = y,
             m8 = 0, m9 = 0, m10 = 1, m11 = -1.15f,
         };
     }
 
-    private void UpdateDebugTexture()
+    private void UpdateNotificationTexture(NotificationMessage message)
     {
-        const uint width = 320;
-        const uint height = 120;
-        const uint bytesPerPixel = 4;
-        var bufferSize = checked((int)(width * height * bytesPerPixel));
-        var buffer = Marshal.AllocHGlobal(bufferSize);
+        byte[] pixels;
+        try
+        {
+            pixels = OpenVrTextTextureRenderer.Render(message, _settings);
+        }
+        catch (Win32Exception ex)
+        {
+            throw new InvalidOperationException($"OpenVR text renderer failed: {ex.Message}", ex);
+        }
+
+        var buffer = Marshal.AllocHGlobal(pixels.Length);
 
         try
         {
-            unsafe
-            {
-                var pixels = (byte*)buffer;
-                for (var y = 0; y < height; y++)
-                {
-                    for (var x = 0; x < width; x++)
-                    {
-                        var index = (int)((y * width + x) * bytesPerPixel);
-                        var border = x < 8 || x >= width - 8 || y < 8 || y >= height - 8;
-                        pixels[index + 0] = border ? (byte)255 : (byte)20;
-                        pixels[index + 1] = border ? (byte)255 : (byte)180;
-                        pixels[index + 2] = border ? (byte)255 : (byte)80;
-                        pixels[index + 3] = border ? (byte)255 : (byte)230;
-                    }
-                }
-            }
-
+            Marshal.Copy(pixels, 0, buffer, pixels.Length);
             ThrowIfOverlayError(
-                GetOverlay().SetOverlayRaw(_overlayHandle, buffer, width, height, bytesPerPixel),
+                GetOverlay().SetOverlayRaw(
+                    _overlayHandle,
+                    buffer,
+                    OpenVrTextTextureRenderer.Width,
+                    OpenVrTextTextureRenderer.Height,
+                    OpenVrTextTextureRenderer.BytesPerPixel),
                 "SetOverlayRaw");
         }
         finally
