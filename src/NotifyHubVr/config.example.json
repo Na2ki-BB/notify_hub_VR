@@ -1,0 +1,9 @@
+{
+  "bind_address": "0.0.0.0",
+  "port": 17890,
+  "default_duration_ms": 5000,
+  "overlay_position": "upper-right",
+  "font_size": 32,
+  "sound_enabled": false,
+  "renderer": "console"
+}
