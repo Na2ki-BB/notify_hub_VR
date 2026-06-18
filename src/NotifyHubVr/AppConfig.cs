@@ -17,6 +17,7 @@ public sealed record AppConfig
     {
         if (!File.Exists(path))
         {
+            Console.WriteLine($"Config file not found, using defaults: {Path.GetFullPath(path)}");
             return new AppConfig();
         }
 

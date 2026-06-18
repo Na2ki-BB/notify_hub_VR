@@ -96,3 +96,12 @@ Example:
 ## Next Step
 
 Add an OpenVR renderer implementing `INotificationRenderer`, replacing `ConsoleNotificationRenderer` when `renderer` is set to `openvr`.
+
+## Tests
+
+```bash
+dotnet build src/NotifyHubVr
+dotnet run --project tests/NotifyHubVr.Tests
+```
+
+The current tests cover notification normalization, config loading, replacement behavior, and auto-hide behavior.

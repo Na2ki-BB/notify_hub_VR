@@ -28,3 +28,10 @@ curl -X POST http://WINDOWS_PC_IP:17890/notify \
   -H 'Content-Type: application/json' \
   -d '{"body":"hello VR"}'
 ```
+
+## Test
+
+```bash
+dotnet build src/NotifyHubVr
+dotnet run --project tests/NotifyHubVr.Tests
+```
