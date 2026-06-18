@@ -2,7 +2,7 @@
 
 VRChatプレイ中に、Raspberry Piなどの通知サーバから送られた短い通知をSteamVR/OpenVR overlayで表示するための実験プロジェクトです。
 
-現在のMVPはC#/.NETのWindows companion appです。最初の段階ではHTTP `POST /notify` を受けてコンソールにプレビュー表示します。SteamVR/OpenVR overlay rendererは次の実装ステップです。
+現在のMVPはC#/.NETのWindows companion appです。最初の段階ではHTTP `POST /notify` を受けてコンソールにプレビュー表示します。OpenVR rendererは固定色debug overlayの段階まで実装済みで、通知テキスト描画が次の実装ステップです。
 
 ## Docs
 

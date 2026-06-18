@@ -86,6 +86,7 @@ public static class NotifyHubWebApplication
             }
             catch (PlatformNotSupportedException ex)
             {
+                Console.Error.WriteLine($"Notification renderer unavailable: {ex.Message}");
                 return Results.Problem(
                     title: "Notification renderer unavailable",
                     detail: ex.Message,
@@ -93,6 +94,7 @@ public static class NotifyHubWebApplication
             }
             catch (InvalidOperationException ex) when (IsRendererUnavailable(ex))
             {
+                Console.Error.WriteLine($"Notification renderer unavailable: {ex.Message}");
                 return Results.Problem(
                     title: "Notification renderer unavailable",
                     detail: ex.Message,

@@ -95,7 +95,7 @@ Example:
 
 ## Next Step
 
-Add actual OpenVR overlay texture rendering to `OpenVrNotificationRenderer`. The current `openvr` renderer is a runtime initialization probe.
+Add actual notification text rendering to `OpenVrNotificationRenderer`. The current `openvr` renderer creates a fixed-color debug overlay.
 
 ## OpenVR Probe
 
@@ -121,7 +121,7 @@ Expected current behavior:
 - On Windows without SteamVR/OpenVR available, it fails with a clear OpenVR runtime or DLL error.
 - On Windows with SteamVR available, it initializes OpenVR and logs that the notification reached the OpenVR renderer.
 
-Actual VR overlay texture rendering is still the next implementation step.
+A fixed-color VR overlay is expected at this stage. Rendering the actual notification text into the overlay is the next implementation step.
 
 ## Tests
 

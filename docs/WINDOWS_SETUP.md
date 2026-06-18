@@ -161,8 +161,9 @@ curl.exe -X POST http://localhost:17890/notify `
 - `OpenVR renderer accepted notification.`
 - `SteamVR runtime installed: True`
 - `HMD present: True` または `False`
+- HMD内の視界右上付近に、固定色の小さなdebug overlayが見える
 
-`HMD present: False` でも、SteamVR runtime初期化まで通っていれば次に進めます。ただし最終的なoverlay表示確認はHMD接続中に行います。
+`HMD present: False` でも、SteamVR runtime初期化まで通っていれば一部確認はできています。ただしdebug overlayの表示確認はHMD接続中に行います。
 
 ## 8. よくあるエラー
 
