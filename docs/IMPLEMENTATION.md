@@ -95,7 +95,33 @@ Example:
 
 ## Next Step
 
-Add an OpenVR renderer implementing `INotificationRenderer`, replacing `ConsoleNotificationRenderer` when `renderer` is set to `openvr`.
+Add actual OpenVR overlay texture rendering to `OpenVrNotificationRenderer`. The current `openvr` renderer is a runtime initialization probe.
+
+## OpenVR Probe
+
+`renderer` can be set to `openvr` on Windows to verify that the app can load `openvr_api.dll` and initialize OpenVR as an overlay application.
+
+```powershell
+cd src\NotifyHubVr
+copy config.openvr.example.json config.openvr.json
+dotnet run -- config.openvr.json
+```
+
+Then send a normal notification:
+
+```powershell
+curl.exe -X POST http://localhost:17890/notify `
+  -H "Content-Type: application/json" `
+  -d "{\"body\":\"openvr probe\"}"
+```
+
+Expected current behavior:
+
+- On Linux, `renderer=openvr` fails with a clear platform error.
+- On Windows without SteamVR/OpenVR available, it fails with a clear OpenVR runtime or DLL error.
+- On Windows with SteamVR available, it initializes OpenVR and logs that the notification reached the OpenVR renderer.
+
+Actual VR overlay texture rendering is still the next implementation step.
 
 ## Tests
 
@@ -104,4 +130,4 @@ dotnet build src/NotifyHubVr
 dotnet run --project tests/NotifyHubVr.Tests
 ```
 
-The current tests cover notification normalization, config loading, replacement behavior, auto-hide behavior, and HTTP endpoint behavior.
+The current tests cover notification normalization, config loading, renderer selection, replacement behavior, auto-hide behavior, HTTP endpoint behavior, and renderer failure handling.

@@ -14,7 +14,9 @@ var tests = new (string Name, Func<Task> Run)[]
     ("NotificationDisplayService replaces visible notification", TestReplaceVisibleNotification),
     ("NotificationDisplayService hides after duration", TestHideAfterDuration),
     ("AppConfig.Load reads snake_case config", TestLoadConfig),
+    ("Renderer registration rejects unknown renderer", TestRendererRegistrationRejectsUnknownRenderer),
     ("HTTP POST /notify updates debug state", TestHttpNotifyEndpoint),
+    ("HTTP POST /notify returns 503 when renderer is unavailable", TestHttpRendererUnavailable),
 };
 
 var failures = 0;
@@ -145,6 +147,25 @@ static Task TestLoadConfig()
     return Task.CompletedTask;
 }
 
+static Task TestRendererRegistrationRejectsUnknownRenderer()
+{
+    var config = new AppConfig
+    {
+        Renderer = "bad-renderer",
+    };
+
+    try
+    {
+        _ = NotifyHubWebApplication.CreateBuilder([], config);
+    }
+    catch (InvalidOperationException ex) when (ex.Message.Contains("Unknown renderer", StringComparison.Ordinal))
+    {
+        return Task.CompletedTask;
+    }
+
+    throw new InvalidOperationException("unknown renderer should fail during service registration");
+}
+
 static async Task TestHttpNotifyEndpoint()
 {
     var config = new AppConfig
@@ -188,6 +209,39 @@ static async Task TestHttpNotifyEndpoint()
     await app.StopAsync();
 }
 
+static async Task TestHttpRendererUnavailable()
+{
+    var config = new AppConfig
+    {
+        BindAddress = "127.0.0.1",
+        Port = 0,
+        DefaultDurationMs = 10_000,
+    };
+
+    var builder = NotifyHubWebApplication.CreateBuilder([], config);
+    builder.Logging.ClearProviders();
+    builder.Services.RemoveAll<INotificationRenderer>();
+    builder.Services.AddSingleton<INotificationRenderer>(new UnavailableRenderer());
+    builder.WebHost.UseUrls("http://127.0.0.1:0");
+
+    await using var app = NotifyHubWebApplication.Build(builder);
+    await app.StartAsync();
+
+    using var client = new HttpClient
+    {
+        BaseAddress = new Uri(app.Urls.Single()),
+    };
+
+    var response = await client.PostAsJsonAsync("/notify", new
+    {
+        body = "should fail",
+    });
+
+    AssertEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode, "POST /notify should report renderer failures as 503");
+
+    await app.StopAsync();
+}
+
 static void AssertEqual<T>(T expected, T actual, string message)
 {
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
@@ -217,6 +271,19 @@ sealed class RecordingRenderer : INotificationRenderer
     public Task HideAsync(CancellationToken cancellationToken)
     {
         Events.Add("hide");
+        return Task.CompletedTask;
+    }
+}
+
+sealed class UnavailableRenderer : INotificationRenderer
+{
+    public Task ShowAsync(NotificationMessage message, CancellationToken cancellationToken)
+    {
+        throw new InvalidOperationException("OpenVR test renderer unavailable");
+    }
+
+    public Task HideAsync(CancellationToken cancellationToken)
+    {
         return Task.CompletedTask;
     }
 }

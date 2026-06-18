@@ -29,7 +29,7 @@ public static class NotifyHubWebApplication
 
         services.AddSingleton(config);
         services.TryAddSingleton<NotificationState>();
-        services.TryAddSingleton<INotificationRenderer, ConsoleNotificationRenderer>();
+        services.AddNotificationRenderer(config);
         services.TryAddSingleton<NotificationDisplayService>();
     }
 
@@ -80,7 +80,24 @@ public static class NotifyHubWebApplication
                 return Results.BadRequest(new { error = "`body` is required." });
             }
 
-            await display.ReplaceAsync(normalized, cancellationToken);
+            try
+            {
+                await display.ReplaceAsync(normalized, cancellationToken);
+            }
+            catch (PlatformNotSupportedException ex)
+            {
+                return Results.Problem(
+                    title: "Notification renderer unavailable",
+                    detail: ex.Message,
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+            catch (InvalidOperationException ex) when (IsRendererUnavailable(ex))
+            {
+                return Results.Problem(
+                    title: "Notification renderer unavailable",
+                    detail: ex.Message,
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
 
             return Results.Accepted(value: new
             {
@@ -91,5 +108,13 @@ public static class NotifyHubWebApplication
                 normalized.Sound,
             });
         });
+    }
+
+    private static bool IsRendererUnavailable(InvalidOperationException ex)
+    {
+        return ex.Message.Contains("OpenVR", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("SteamVR", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("openvr_api", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("renderer", StringComparison.OrdinalIgnoreCase);
     }
 }
