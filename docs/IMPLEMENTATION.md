@@ -109,9 +109,12 @@ dotnet run -- config.openvr.json
 Then send a normal notification:
 
 ```powershell
-$body = @{ body = "openvr probe" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:17890/notify" -Method Post -ContentType "application/json" -Body $body
+$json = @{ body = "日本語テスト`n2行目"; title = "Notify Hub"; level = "info" } | ConvertTo-Json
+$bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+Invoke-RestMethod -Uri "http://localhost:17890/notify" -Method Post -ContentType "application/json; charset=utf-8" -Body $bytes
 ```
+
+When sending Japanese text from Windows PowerShell, pass UTF-8 bytes to `-Body`. Passing a .NET string directly can replace non-ASCII characters with `?` before the server receives the JSON.
 
 Expected current behavior:
 

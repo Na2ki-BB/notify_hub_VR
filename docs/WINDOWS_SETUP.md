@@ -151,9 +151,12 @@ dotnet run -- config.openvr.json
 別のPowerShellで:
 
 ```powershell
-$body = @{ body = "openvr probe" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:17890/notify" -Method Post -ContentType "application/json" -Body $body
+$json = @{ body = "日本語テスト`n2行目"; title = "Notify Hub"; level = "info" } | ConvertTo-Json
+$bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+Invoke-RestMethod -Uri "http://localhost:17890/notify" -Method Post -ContentType "application/json; charset=utf-8" -Body $bytes
 ```
+
+PowerShellでは日本語JSONを文字列のまま `-Body` に渡すと `?` に置換されることがあります。日本語を送るときはUTF-8 bytesで渡してください。
 
 期待する結果:
 
