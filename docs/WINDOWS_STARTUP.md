@@ -19,21 +19,27 @@ powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub
 powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub-startup.ps1 -StartNow
 ```
 
+`Register-ScheduledTask` がアクセス拒否される環境では、最初からStartupフォルダ方式を指定できます。
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub-startup.ps1 -StartNow -UseStartupFolder
+```
+
 スクリプトは次の処理をします。
 
 - `dotnet publish` でNotify Hub VRをpublish
 - `%LOCALAPPDATA%\NotifyHubVR\app` にアプリを配置
 - SteamVRの `openvr_api.dll` をpublish先にコピー
 - `%LOCALAPPDATA%\NotifyHubVR\config.openvr.json` を作成
-- `Notify Hub VR` というScheduled Taskを登録
-- Scheduled Task登録がアクセス拒否された場合、Startupフォルダに `Notify Hub VR.cmd` を作成
+- 通常は `Notify Hub VR` というScheduled Taskを登録
+- `-UseStartupFolder` 指定時、またはScheduled Task登録に失敗した場合、Startupフォルダに `Notify Hub VR.cmd` を作成
 - ログを `%LOCALAPPDATA%\NotifyHubVR\logs` に出力
 
 `%LOCALAPPDATA%\NotifyHubVR\config.openvr.json` がすでにある場合は上書きしません。
 
 ## 確認
 
-登録済みtask:
+登録済みtask。Startupフォルダ方式を使った場合はtaskがないので、この確認は不要です。
 
 ```powershell
 Get-ScheduledTask -TaskName "Notify Hub VR"
@@ -45,7 +51,7 @@ Startupフォルダfallbackを使っている場合:
 Get-ChildItem ([Environment]::GetFolderPath("Startup")) -Filter "Notify Hub VR.cmd"
 ```
 
-手動起動:
+手動起動。Startupフォルダ方式を使った場合は次の `run-notifyhub.ps1` を直接起動してください。
 
 ```powershell
 Start-ScheduledTask -TaskName "Notify Hub VR"
@@ -86,7 +92,13 @@ git pull
 powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub-startup.ps1 -StartNow
 ```
 
-install scriptは既存taskが動いている場合、publish前に自動で停止します。
+Startupフォルダ方式を使う環境では、更新時も同じオプションを付けてください。
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub-startup.ps1 -StartNow -UseStartupFolder
+```
+
+install scriptは既存taskが動いている場合、publish前に自動で停止します。既存taskの確認自体がアクセス拒否される場合でも、publishは続行します。
 
 ## アンインストール
 
