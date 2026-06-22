@@ -1,0 +1,12 @@
+{
+  "input_path": "/home/pi/notify-source/current.json",
+  "notify_url": "http://WINDOWS_PC_IP:17890/notify",
+  "state_path": "/var/lib/notify-hub-vr-forwarder/state.json",
+  "default_level": "info",
+  "default_duration_ms": 5000,
+  "debounce_ms": 120,
+  "request_timeout_ms": 5000,
+  "retry_initial_interval_ms": 1000,
+  "retry_max_interval_ms": 300000,
+  "retry_max_elapsed_ms": 1800000
+}

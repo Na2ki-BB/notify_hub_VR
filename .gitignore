@@ -6,3 +6,9 @@ obj/
 
 # Local runtime config copied from config.example.json.
 src/NotifyHubVr/config.json
+
+# Local Raspberry Pi forwarder config/state.
+cmd/notify-forwarder/config.json
+cmd/notify-forwarder/state.json
+cmd/notify-forwarder/*.state.json
+/notify-forwarder
