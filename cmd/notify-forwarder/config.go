@@ -10,16 +10,18 @@ import (
 )
 
 type Config struct {
-	InputPath              string `json:"input_path"`
-	NotifyURL              string `json:"notify_url"`
-	StatePath              string `json:"state_path"`
-	DefaultLevel           string `json:"default_level"`
-	DefaultDurationMS      int    `json:"default_duration_ms"`
-	DebounceMS             int    `json:"debounce_ms"`
-	RequestTimeoutMS       int    `json:"request_timeout_ms"`
-	RetryInitialIntervalMS int    `json:"retry_initial_interval_ms"`
-	RetryMaxIntervalMS     int    `json:"retry_max_interval_ms"`
-	RetryMaxElapsedMS      int    `json:"retry_max_elapsed_ms"`
+	InputPath                         string `json:"input_path"`
+	NotifyURL                         string `json:"notify_url"`
+	StatePath                         string `json:"state_path"`
+	DefaultLevel                      string `json:"default_level"`
+	DefaultDurationMS                 int    `json:"default_duration_ms"`
+	DebounceMS                        int    `json:"debounce_ms"`
+	RequestTimeoutMS                  int    `json:"request_timeout_ms"`
+	RetryInitialIntervalMS            int    `json:"retry_initial_interval_ms"`
+	RetryMaxIntervalMS                int    `json:"retry_max_interval_ms"`
+	RetryUnavailableInitialIntervalMS int    `json:"retry_unavailable_initial_interval_ms"`
+	RetryUnavailableMaxIntervalMS     int    `json:"retry_unavailable_max_interval_ms"`
+	RetryMaxElapsedMS                 int    `json:"retry_max_elapsed_ms"`
 }
 
 func LoadConfig(path string) (Config, error) {
@@ -59,6 +61,12 @@ func (c Config) withDefaults() Config {
 	}
 	if c.RetryMaxIntervalMS <= 0 {
 		c.RetryMaxIntervalMS = 300000
+	}
+	if c.RetryUnavailableInitialIntervalMS <= 0 {
+		c.RetryUnavailableInitialIntervalMS = 5000
+	}
+	if c.RetryUnavailableMaxIntervalMS <= 0 {
+		c.RetryUnavailableMaxIntervalMS = 30000
 	}
 	if c.RetryMaxElapsedMS <= 0 {
 		c.RetryMaxElapsedMS = 1800000
@@ -100,6 +108,14 @@ func (c Config) RetryInitialInterval() time.Duration {
 
 func (c Config) RetryMaxInterval() time.Duration {
 	return time.Duration(c.RetryMaxIntervalMS) * time.Millisecond
+}
+
+func (c Config) RetryUnavailableInitialInterval() time.Duration {
+	return time.Duration(c.RetryUnavailableInitialIntervalMS) * time.Millisecond
+}
+
+func (c Config) RetryUnavailableMaxInterval() time.Duration {
+	return time.Duration(c.RetryUnavailableMaxIntervalMS) * time.Millisecond
 }
 
 func (c Config) RetryMaxElapsed() time.Duration {

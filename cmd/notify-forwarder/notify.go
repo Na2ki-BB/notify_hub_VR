@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,7 +15,8 @@ import (
 func SendWithRetry(ctx context.Context, config Config, snapshot InputSnapshot) (State, error) {
 	startedAt := time.Now()
 	deadline := startedAt.Add(config.RetryMaxElapsed())
-	interval := config.RetryInitialInterval()
+	standardInterval := config.RetryInitialInterval()
+	unavailableInterval := config.RetryUnavailableInitialInterval()
 	attempt := 1
 
 	for {
@@ -35,11 +37,20 @@ func SendWithRetry(ctx context.Context, config Config, snapshot InputSnapshot) (
 			return State{}, fmt.Errorf("retry deadline exceeded after %s: %w", config.RetryMaxElapsed(), err)
 		}
 
-		log.Printf("notification send attempt %d failed: %v", attempt, err)
-		sleep := interval
+		retryClass := classifyRetry(err)
+		if retryClass == retryStop {
+			return State{}, err
+		}
+
+		sleep := standardInterval
+		if retryClass == retryShortUnavailable {
+			sleep = unavailableInterval
+		}
 		if remaining := time.Until(deadline); sleep > remaining {
 			sleep = remaining
 		}
+
+		log.Printf("notification send attempt %d failed; retrying in %s: %v", attempt, sleep, err)
 
 		select {
 		case <-ctx.Done():
@@ -47,10 +58,17 @@ func SendWithRetry(ctx context.Context, config Config, snapshot InputSnapshot) (
 		case <-time.After(sleep):
 		}
 
-		if interval < config.RetryMaxInterval() {
-			interval *= 2
-			if interval > config.RetryMaxInterval() {
-				interval = config.RetryMaxInterval()
+		if retryClass == retryShortUnavailable {
+			if unavailableInterval < config.RetryUnavailableMaxInterval() {
+				unavailableInterval *= 2
+				if unavailableInterval > config.RetryUnavailableMaxInterval() {
+					unavailableInterval = config.RetryUnavailableMaxInterval()
+				}
+			}
+		} else if standardInterval < config.RetryMaxInterval() {
+			standardInterval *= 2
+			if standardInterval > config.RetryMaxInterval() {
+				standardInterval = config.RetryMaxInterval()
 			}
 		}
 		attempt++
@@ -80,8 +98,52 @@ func SendNotification(ctx context.Context, config Config, notification NotifyReq
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		responseBody, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return fmt.Errorf("post notify returned %s: %s", response.Status, string(responseBody))
+		return &HTTPStatusError{
+			StatusCode: response.StatusCode,
+			Status:     response.Status,
+			Body:       string(responseBody),
+		}
 	}
 
 	return nil
+}
+
+type HTTPStatusError struct {
+	StatusCode int
+	Status     string
+	Body       string
+}
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("post notify returned %s: %s", e.Status, e.Body)
+}
+
+type retryClass int
+
+const (
+	retryStandard retryClass = iota
+	retryShortUnavailable
+	retryStop
+)
+
+func classifyRetry(err error) retryClass {
+	var httpErr *HTTPStatusError
+	if !errors.As(err, &httpErr) {
+		return retryStandard
+	}
+
+	switch httpErr.StatusCode {
+	case http.StatusServiceUnavailable:
+		return retryShortUnavailable
+	case http.StatusRequestTimeout, http.StatusTooManyRequests:
+		return retryStandard
+	}
+
+	if httpErr.StatusCode >= 500 {
+		return retryStandard
+	}
+	if httpErr.StatusCode >= 400 {
+		return retryStop
+	}
+	return retryStandard
 }

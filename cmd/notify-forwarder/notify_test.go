@@ -59,3 +59,27 @@ func TestSendNotificationReportsHTTPFailure(t *testing.T) {
 		t.Fatalf("error should include HTTP status: %v", err)
 	}
 }
+
+func TestClassifyRetryUsesShortRetryForServiceUnavailable(t *testing.T) {
+	err := &HTTPStatusError{
+		StatusCode: http.StatusServiceUnavailable,
+		Status:     "503 Service Unavailable",
+		Body:       "renderer unavailable",
+	}
+
+	if got := classifyRetry(err); got != retryShortUnavailable {
+		t.Fatalf("classifyRetry mismatch: %v", got)
+	}
+}
+
+func TestClassifyRetryStopsForBadRequest(t *testing.T) {
+	err := &HTTPStatusError{
+		StatusCode: http.StatusBadRequest,
+		Status:     "400 Bad Request",
+		Body:       "bad payload",
+	}
+
+	if got := classifyRetry(err); got != retryStop {
+		t.Fatalf("classifyRetry mismatch: %v", got)
+	}
+}

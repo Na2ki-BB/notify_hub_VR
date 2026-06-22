@@ -28,7 +28,7 @@ sudo systemctl restart notify-hub-vr-forwarder
 - `input change detected`: JSONファイル更新を検知しています。
 - `notification sent`: Windows側への送信成功です。
 - `context deadline exceeded`: Windows PCに届いていないか、応答がtimeoutしています。
-- `503 Service Unavailable`: Windows側Notify Hub VRには届いていますが、OpenVR/HMD側がまだ通知を表示できない状態です。
+- `503 Service Unavailable`: Windows側Notify Hub VRには届いていますが、OpenVR/HMD側がまだ通知を表示できない状態です。この場合は短めの間隔でretryします。
 
 ## Windows Notify Hub VR
 

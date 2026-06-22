@@ -8,5 +8,7 @@
   "request_timeout_ms": 5000,
   "retry_initial_interval_ms": 1000,
   "retry_max_interval_ms": 300000,
+  "retry_unavailable_initial_interval_ms": 5000,
+  "retry_unavailable_max_interval_ms": 30000,
   "retry_max_elapsed_ms": 1800000
 }
