@@ -72,11 +72,82 @@ cp cmd/notify-forwarder/config.example.json cmd/notify-forwarder/config.json
 go run ./cmd/notify-forwarder --config cmd/notify-forwarder/config.json
 ```
 
-Raspberry Piへ配置する場合はbuildできます。
+手動でbuildして実行する場合:
 
 ```bash
 go build -o bin/notify-forwarder ./cmd/notify-forwarder
 ./bin/notify-forwarder --config cmd/notify-forwarder/config.json
+```
+
+## systemdで常駐化
+
+Raspberry Piで常駐させる場合は、インストールスクリプトを使います。
+
+```bash
+./scripts/install-forwarder-systemd.sh
+```
+
+このスクリプトは次の場所へ配置します。
+
+- binary: `/usr/local/bin/notify-hub-vr-forwarder`
+- config: `/etc/notify-hub-vr-forwarder/config.json`
+- state: `/var/lib/notify-hub-vr-forwarder/state.json`
+- service: `/etc/systemd/system/notify-hub-vr-forwarder.service`
+
+`cmd/notify-forwarder/config.json` が存在する場合、初回だけその内容を `/etc/notify-hub-vr-forwarder/config.json` にコピーします。すでに `/etc/notify-hub-vr-forwarder/config.json` が存在する場合は上書きしません。
+
+初回はconfigを編集してください。
+
+```bash
+sudo nano /etc/notify-hub-vr-forwarder/config.json
+```
+
+最低限、次の3つを実環境に合わせます。`state_path` はserviceが書き込める `/var/lib/notify-hub-vr-forwarder/` 配下に置いてください。
+
+```json
+{
+  "input_path": "/home/satomi/raspi-esp32-status-panel/hub/data/vrchat.json",
+  "notify_url": "http://192.168.1.14:17890/notify",
+  "state_path": "/var/lib/notify-hub-vr-forwarder/state.json"
+}
+```
+
+config編集後、起動してboot時にも自動起動するようにします。
+
+```bash
+sudo systemctl enable --now notify-hub-vr-forwarder
+```
+
+状態確認:
+
+```bash
+systemctl status notify-hub-vr-forwarder
+```
+
+ログ確認:
+
+```bash
+journalctl -u notify-hub-vr-forwarder -f
+```
+
+停止:
+
+```bash
+sudo systemctl stop notify-hub-vr-forwarder
+```
+
+再起動:
+
+```bash
+sudo systemctl restart notify-hub-vr-forwarder
+```
+
+forwarderを更新した場合は、repoを更新してからもう一度インストールスクリプトを実行し、serviceを再起動します。
+
+```bash
+git pull
+./scripts/install-forwarder-systemd.sh
+sudo systemctl restart notify-hub-vr-forwarder
 ```
 
 ## 挙動
