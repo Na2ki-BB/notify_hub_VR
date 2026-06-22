@@ -6,6 +6,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$StartupDir = [Environment]::GetFolderPath("Startup")
+$StartupCmdPath = Join-Path $StartupDir "Notify Hub VR.cmd"
+
 $Task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($null -ne $Task) {
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -13,6 +16,11 @@ if ($null -ne $Task) {
     Write-Host "Removed Scheduled Task: $TaskName"
 } else {
     Write-Host "Scheduled Task not found: $TaskName"
+}
+
+if (Test-Path $StartupCmdPath) {
+    Remove-Item -Force $StartupCmdPath
+    Write-Host "Removed Startup folder entry: $StartupCmdPath"
 }
 
 if ($RemoveFiles) {

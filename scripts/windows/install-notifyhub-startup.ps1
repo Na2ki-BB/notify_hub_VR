@@ -12,6 +12,8 @@ $AppDir = Join-Path $InstallDir "app"
 $LogDir = Join-Path $InstallDir "logs"
 $ConfigPath = Join-Path $InstallDir "config.openvr.json"
 $RunnerPath = Join-Path $InstallDir "run-notifyhub.ps1"
+$StartupDir = [Environment]::GetFolderPath("Startup")
+$StartupCmdPath = Join-Path $StartupDir "Notify Hub VR.cmd"
 
 $ExistingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($null -ne $ExistingTask) {
@@ -87,22 +89,54 @@ $Settings = New-ScheduledTaskSettingsSet `
     -RestartCount 3 `
     -RestartInterval (New-TimeSpan -Minutes 1)
 
-Register-ScheduledTask `
-    -TaskName $TaskName `
-    -Action $Action `
-    -Trigger $Trigger `
-    -Principal $Principal `
-    -Settings $Settings `
-    -Force | Out-Null
+function Install-StartupFolderEntry {
+    New-Item -ItemType Directory -Force -Path $StartupDir | Out-Null
+    $StartupCommand = @"
+@echo off
+start "Notify Hub VR" /min "$PowerShellExe" -NoProfile -ExecutionPolicy Bypass -File "$RunnerPath"
+"@
+    Set-Content -Path $StartupCmdPath -Value $StartupCommand -Encoding ASCII
+    Write-Host "Registered Startup folder entry: $StartupCmdPath"
+}
 
-Write-Host "Registered Scheduled Task: $TaskName"
+$RegisteredTask = $false
+try {
+    Register-ScheduledTask `
+        -TaskName $TaskName `
+        -Action $Action `
+        -Trigger $Trigger `
+        -Principal $Principal `
+        -Settings $Settings `
+        -Force | Out-Null
+    $RegisteredTask = $true
+    if (Test-Path $StartupCmdPath) {
+        Remove-Item -Force $StartupCmdPath
+    }
+    Write-Host "Registered Scheduled Task: $TaskName"
+} catch {
+    if ($_.Exception.Message -match "Access is denied|アクセス.*拒否") {
+        Write-Warning "Register-ScheduledTask was denied. Falling back to the current user's Startup folder."
+        Install-StartupFolderEntry
+    } else {
+        throw
+    }
+}
+
 Write-Host "InstallDir: $InstallDir"
 Write-Host "Config: $ConfigPath"
 Write-Host "Logs: $LogDir"
 
 if ($StartNow) {
-    Start-ScheduledTask -TaskName $TaskName
-    Write-Host "Started Scheduled Task: $TaskName"
+    if ($RegisteredTask) {
+        Start-ScheduledTask -TaskName $TaskName
+        Write-Host "Started Scheduled Task: $TaskName"
+    } else {
+        Start-Process -FilePath $PowerShellExe `
+            -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $RunnerPath) `
+            -WorkingDirectory $InstallDir `
+            -WindowStyle Minimized
+        Write-Host "Started Notify Hub VR directly."
+    }
 }
 
 Write-Host ""
@@ -110,4 +144,6 @@ Write-Host "Useful commands:"
 Write-Host "  Get-ScheduledTask -TaskName '$TaskName'"
 Write-Host "  Start-ScheduledTask -TaskName '$TaskName'"
 Write-Host "  Stop-ScheduledTask -TaskName '$TaskName'"
+Write-Host "  Stop-Process -Name NotifyHubVr -ErrorAction SilentlyContinue"
 Write-Host "  Get-Content -Tail 80 -Wait '$LogDir\notifyhub-*.log'"
+Write-Host "  Startup fallback file: $StartupCmdPath"
