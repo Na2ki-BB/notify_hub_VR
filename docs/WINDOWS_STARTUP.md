@@ -2,7 +2,7 @@
 
 Windows側のNotify Hub VRをログオン時に自動起動するための手順です。
 
-標準では、現在ユーザーのStartupフォルダに起動用 `.vbs` を作成します。これは管理者権限なしで動き、WindowsにログオンしたときにNotify Hub VRを非表示で自動起動します。毎回コマンドを打つ必要はありません。
+標準では、現在ユーザーのRun registry (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`) に非表示ランチャーを登録します。これは管理者権限なしで動き、WindowsユーザーがログオンしたときにNotify Hub VRを非表示で自動起動します。毎回コマンドを打つ必要はありません。
 
 SteamVR/OpenVR overlayはログイン中のデスクトップセッションで動かす必要があります。そのため、Windows Serviceではなく、ログオン後に通常アプリとして起動します。
 
@@ -24,7 +24,7 @@ cd /d C:\Users\YOUR_USER\notify_hub_VR
 powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub-startup.ps1 -StartNow
 ```
 
-`-StartNow` を付けると、インストール後にその場でNotify Hub VRを非表示で起動します。次回以降はWindowsログオン時にStartupフォルダから非表示で自動起動します。
+`-StartNow` を付けると、インストール後にその場でNotify Hub VRを非表示で起動します。次回以降はWindowsユーザーのログオン時にRun registryから非表示で自動起動します。
 
 スクリプトは次の処理をします。
 
@@ -33,28 +33,29 @@ powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub
 - `%LOCALAPPDATA%\NotifyHubVR\app` にアプリを配置
 - SteamVRの `openvr_api.dll` をpublish先にコピー
 - `%LOCALAPPDATA%\NotifyHubVR\config.openvr.json` を作成
-- Startupフォルダに `Notify Hub VR.vbs` を作成
+- `%LOCALAPPDATA%\NotifyHubVR\start-notifyhub-hidden.vbs` を作成
+- 現在ユーザーのRun registryに `Notify Hub VR` を登録
 - ログを `%LOCALAPPDATA%\NotifyHubVR\logs` に出力
 
 `%LOCALAPPDATA%\NotifyHubVR\config.openvr.json` がすでにある場合は上書きしません。
 
 ## 確認
 
-Startupフォルダに登録されているか確認します。
+Run registryに登録されているか確認します。
 
 PowerShell:
 
 ```powershell
-Get-ChildItem ([Environment]::GetFolderPath("Startup")) -Filter "Notify Hub VR.vbs"
+Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Notify Hub VR"
 ```
 
-cmd.exe:
+起動ランチャーが存在するか確認します。
 
-```bat
-dir "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Notify Hub VR.vbs"
+```powershell
+Test-Path "$env:LOCALAPPDATA\NotifyHubVR\start-notifyhub-hidden.vbs"
 ```
 
-PowerShellウィンドウは表示されません。起動中かどうかはプロセスまたはログで確認します。
+PowerShellウィンドウは表示されません。起動中かどうかはプロセスまたはログで確認します。ランチャーがログオン時に呼ばれたかは `startup-launch.log` で確認できます。
 
 PowerShell:
 
@@ -68,18 +69,18 @@ cmd.exe:
 tasklist /FI "IMAGENAME eq NotifyHubVr.exe"
 ```
 
-手動起動が必要な場合。このコマンドは起動中のPowerShellをその場に残すため、通常運用ではinstall scriptを使ってください。
+手動起動が必要な場合は、非表示ランチャーを呼びます。
 
 PowerShell:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\NotifyHubVR\run-notifyhub.ps1"
+wscript.exe //B //Nologo "$env:LOCALAPPDATA\NotifyHubVR\start-notifyhub-hidden.vbs"
 ```
 
 cmd.exe:
 
 ```bat
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%LOCALAPPDATA%\NotifyHubVR\run-notifyhub.ps1"
+wscript.exe //B //Nologo "%LOCALAPPDATA%\NotifyHubVR\start-notifyhub-hidden.vbs"
 ```
 
 停止:
@@ -109,6 +110,7 @@ Get-Content -Tail 80 "$env:LOCALAPPDATA\NotifyHubVR\logs\notifyhub-*.log"
 
 ```powershell
 Get-Content -Tail 80 -Wait "$env:LOCALAPPDATA\NotifyHubVR\logs\notifyhub-*.log"
+Get-Content -Tail 80 "$env:LOCALAPPDATA\NotifyHubVR\logs\startup-launch.log"
 ```
 
 ## 更新
@@ -133,13 +135,13 @@ powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub
 
 ## Task Schedulerを使いたい場合
 
-通常は不要です。どうしてもTask Schedulerでログオン時起動したい場合だけ `-UseScheduledTask` を付けます。
+通常は不要です。どうしてもTask Schedulerでログオン時起動したい場合だけ `-UseScheduledTask` を付けます。標準のRun registry登録で問題がある場合だけ検討してください。
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub-startup.ps1 -StartNow -UseScheduledTask
 ```
 
-`Register-ScheduledTask` がアクセス拒否された場合、スクリプトはStartupフォルダ方式へfallbackします。
+`Register-ScheduledTask` がアクセス拒否された場合、スクリプトはRun registry方式へfallbackします。
 
 ## アンインストール
 

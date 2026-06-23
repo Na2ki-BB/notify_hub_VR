@@ -71,7 +71,7 @@ Raspberry Pi側:
 
 ## Windows Quick Start
 
-通常運用では、Notify Hub VRを現在ユーザーのStartupフォルダに登録します。Task Schedulerは標準では使わないため、管理者権限は不要です。PowerShellウィンドウは表示せず、裏で起動します。
+通常運用では、Notify Hub VRを現在ユーザーのRun registryに登録します。Task Schedulerは標準では使わないため、管理者権限は不要です。PowerShellウィンドウは表示せず、裏で起動します。
 
 PowerShell:
 
@@ -87,7 +87,7 @@ cd /d C:\Users\YOUR_USER\notify_hub_VR
 powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub-startup.ps1 -StartNow
 ```
 
-以後は、Windowsログオン時にNotify Hub VRが非表示で自動起動します。
+以後は、Windowsユーザーのログオン時にNotify Hub VRが非表示で自動起動します。
 
 起動確認:
 

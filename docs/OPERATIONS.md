@@ -32,18 +32,18 @@ sudo systemctl restart notify-hub-vr-forwarder
 
 ## Windows Notify Hub VR
 
-標準のStartupフォルダ方式で自動起動している場合、登録確認は次の通りです。
+標準のRun registry方式で自動起動している場合、登録確認は次の通りです。
 
 PowerShell:
 
 ```powershell
-Get-ChildItem ([Environment]::GetFolderPath("Startup")) -Filter "Notify Hub VR.vbs"
+Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Notify Hub VR"
 ```
 
-cmd.exe:
+ランチャーがログオン時に呼ばれたか確認:
 
-```bat
-dir "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Notify Hub VR.vbs"
+```powershell
+Get-Content -Tail 80 "$env:LOCALAPPDATA\NotifyHubVR\logs\startup-launch.log"
 ```
 
 PowerShellウィンドウは表示されません。起動中か確認:
@@ -55,7 +55,7 @@ Get-Process NotifyHubVr -ErrorAction SilentlyContinue
 手動起動・停止:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\NotifyHubVR\run-notifyhub.ps1"
+wscript.exe //B //Nologo "$env:LOCALAPPDATA\NotifyHubVR\start-notifyhub-hidden.vbs"
 Stop-Process -Name NotifyHubVr -ErrorAction SilentlyContinue
 ```
 

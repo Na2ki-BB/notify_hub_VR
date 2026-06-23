@@ -14,13 +14,51 @@ $AppDir = Join-Path $InstallDir "app"
 $LogDir = Join-Path $InstallDir "logs"
 $ConfigPath = Join-Path $InstallDir "config.openvr.json"
 $RunnerPath = Join-Path $InstallDir "run-notifyhub.ps1"
+$LauncherPath = Join-Path $InstallDir "start-notifyhub-hidden.vbs"
 $StartupDir = [Environment]::GetFolderPath("Startup")
 $StartupCmdPath = Join-Path $StartupDir "Notify Hub VR.cmd"
 $StartupVbsPath = Join-Path $StartupDir "Notify Hub VR.vbs"
+$RunKeyPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+$RunValueName = "Notify Hub VR"
 $PowerShellExe = (Get-Command powershell.exe).Source
+$WScriptExe = (Get-Command wscript.exe).Source
 
-if ($UseStartupFolder) {
-    Write-Warning "-UseStartupFolder is now the default and can be omitted."
+function ConvertTo-VbsString([string]$Value) {
+    return $Value.Replace('"', '""')
+}
+
+function Remove-StartupFolderEntries {
+    if (Test-Path $StartupCmdPath) {
+        Remove-Item -Force $StartupCmdPath
+        Write-Host "Removed legacy Startup folder entry: $StartupCmdPath"
+    }
+    if (Test-Path $StartupVbsPath) {
+        Remove-Item -Force $StartupVbsPath
+        Write-Host "Removed Startup folder entry: $StartupVbsPath"
+    }
+}
+
+function Remove-RunKeyEntry {
+    try {
+        Remove-ItemProperty -Path $RunKeyPath -Name $RunValueName -ErrorAction SilentlyContinue
+    } catch {
+        Write-Warning "Could not remove HKCU Run entry."
+        Write-Warning $_.Exception.Message
+    }
+}
+
+function Remove-ScheduledTaskIfPresent {
+    try {
+        $ExistingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+        if ($null -ne $ExistingTask) {
+            Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+            Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+            Write-Host "Removed existing Scheduled Task: $TaskName"
+        }
+    } catch {
+        Write-Warning "Could not query or remove the existing Scheduled Task. Continuing."
+        Write-Warning $_.Exception.Message
+    }
 }
 
 $RunningProcesses = Get-Process -Name NotifyHubVr -ErrorAction SilentlyContinue
@@ -42,6 +80,8 @@ if ($UseScheduledTask) {
         Write-Warning "Could not query or stop the existing Scheduled Task. Continuing with publish."
         Write-Warning $_.Exception.Message
     }
+} else {
+    Remove-ScheduledTaskIfPresent
 }
 
 Write-Host "Publishing Notify Hub VR to $AppDir"
@@ -96,38 +136,72 @@ exit $LASTEXITCODE
 '@
 Set-Content -Path $RunnerPath -Value $Runner -Encoding UTF8
 
-function ConvertTo-VbsString([string]$Value) {
-    return $Value.Replace('"', '""')
+function Write-HiddenLauncher {
+    $PowerShellForVbs = ConvertTo-VbsString $PowerShellExe
+    $RunnerForVbs = ConvertTo-VbsString $RunnerPath
+    $LogDirForVbs = ConvertTo-VbsString $LogDir
+    $StartupLogForVbs = ConvertTo-VbsString (Join-Path $LogDir "startup-launch.log")
+    $Launcher = @"
+Option Explicit
+Dim shell, fso, logDir, logPath, command
+Set shell = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+logDir = "$LogDirForVbs"
+logPath = "$StartupLogForVbs"
+If Not fso.FolderExists(logDir) Then
+  fso.CreateFolder(logDir)
+End If
+AppendLog "launcher invoked"
+command = """$PowerShellForVbs"" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$RunnerForVbs"""
+AppendLog "starting runner"
+shell.Run command, 0, False
+
+Sub AppendLog(message)
+  Dim file
+  Set file = fso.OpenTextFile(logPath, 8, True)
+  file.WriteLine Now & " " & message
+  file.Close
+End Sub
+"@
+    Set-Content -Path $LauncherPath -Value $Launcher -Encoding Unicode
+    Write-Host "Wrote hidden launcher: $LauncherPath"
+}
+
+function Register-RunKeyEntry {
+    New-Item -Path $RunKeyPath -Force | Out-Null
+    $RunCommand = "`"$WScriptExe`" //B //Nologo `"$LauncherPath`""
+    Set-ItemProperty -Path $RunKeyPath -Name $RunValueName -Value $RunCommand
+    Remove-StartupFolderEntries
+    Write-Host "Registered HKCU Run entry: $RunValueName"
 }
 
 function Install-StartupFolderEntry {
     New-Item -ItemType Directory -Force -Path $StartupDir | Out-Null
-    $PowerShellForVbs = ConvertTo-VbsString $PowerShellExe
-    $RunnerForVbs = ConvertTo-VbsString $RunnerPath
-    $StartupScript = @"
-Set shell = CreateObject("WScript.Shell")
-shell.Run """$PowerShellForVbs"" -NoProfile -ExecutionPolicy Bypass -File ""$RunnerForVbs""", 0, False
-"@
-    Set-Content -Path $StartupVbsPath -Value $StartupScript -Encoding Unicode
+    Copy-Item -Force $LauncherPath $StartupVbsPath
+    Remove-RunKeyEntry
     if (Test-Path $StartupCmdPath) {
         Remove-Item -Force $StartupCmdPath
     }
-    Write-Host "Registered hidden Startup folder entry: $StartupVbsPath"
+    Write-Host "Registered Startup folder entry: $StartupVbsPath"
 }
 
-function Start-NotifyHubDirectly {
-    Start-Process -FilePath $PowerShellExe `
-        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $RunnerPath) `
+function Start-NotifyHubInBackground {
+    Start-Process -FilePath $WScriptExe `
+        -ArgumentList @("//B", "//Nologo", $LauncherPath) `
         -WorkingDirectory $InstallDir `
         -WindowStyle Hidden
-    Write-Host "Started Notify Hub VR directly in the background."
+    Write-Host "Started Notify Hub VR through hidden launcher."
 }
+
+Write-HiddenLauncher
 
 $RegisteredTask = $false
 if ($UseScheduledTask) {
+    Remove-RunKeyEntry
+    Remove-StartupFolderEntries
     $Action = New-ScheduledTaskAction `
-        -Execute $PowerShellExe `
-        -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$RunnerPath`"" `
+        -Execute $WScriptExe `
+        -Argument "//B //Nologo `"$LauncherPath`"" `
         -WorkingDirectory $InstallDir
     $Trigger = New-ScheduledTaskTrigger -AtLogOn
     $Principal = New-ScheduledTaskPrincipal `
@@ -151,21 +225,17 @@ if ($UseScheduledTask) {
             -Settings $Settings `
             -Force | Out-Null
         $RegisteredTask = $true
-        if (Test-Path $StartupCmdPath) {
-            Remove-Item -Force $StartupCmdPath
-        }
-        if (Test-Path $StartupVbsPath) {
-            Remove-Item -Force $StartupVbsPath
-        }
         Write-Host "Registered Scheduled Task: $TaskName"
     } catch {
-        Write-Warning "Register-ScheduledTask failed. Falling back to the current user's Startup folder."
+        Write-Warning "Register-ScheduledTask failed. Falling back to HKCU Run entry."
         Write-Warning $_.Exception.Message
-        Install-StartupFolderEntry
+        Register-RunKeyEntry
     }
-} else {
-    Write-Host "Using Startup folder entry for logon launch."
+} elseif ($UseStartupFolder) {
+    Write-Warning "Using Startup folder entry instead of the default HKCU Run entry."
     Install-StartupFolderEntry
+} else {
+    Register-RunKeyEntry
 }
 
 Write-Host "InstallDir: $InstallDir"
@@ -178,19 +248,22 @@ if ($StartNow) {
             Start-ScheduledTask -TaskName $TaskName
             Write-Host "Started Scheduled Task: $TaskName"
         } catch {
-            Write-Warning "Start-ScheduledTask failed. Starting Notify Hub VR directly."
+            Write-Warning "Start-ScheduledTask failed. Starting Notify Hub VR through hidden launcher."
             Write-Warning $_.Exception.Message
-            Start-NotifyHubDirectly
+            Start-NotifyHubInBackground
         }
     } else {
-        Start-NotifyHubDirectly
+        Start-NotifyHubInBackground
     }
 }
 
 Write-Host ""
 Write-Host "Useful commands:"
+Write-Host "  Get-ItemProperty -Path '$RunKeyPath' -Name '$RunValueName'"
+Write-Host "  Get-Process NotifyHubVr -ErrorAction SilentlyContinue"
 Write-Host "  Stop-Process -Name NotifyHubVr -ErrorAction SilentlyContinue # PowerShell"
 Write-Host "  taskkill /IM NotifyHubVr.exe /F                         # cmd.exe"
 Write-Host "  Get-Content -Tail 80 -Wait '$LogDir\notifyhub-*.log'"
-Write-Host "  Startup folder file: $StartupVbsPath"
+Write-Host "  Get-Content -Tail 80 '$LogDir\startup-launch.log'"
+Write-Host "  Hidden launcher: $LauncherPath"
 Write-Host "  Use -UseScheduledTask only if you intentionally want Task Scheduler registration."

@@ -9,6 +9,9 @@ $ErrorActionPreference = "Stop"
 $StartupDir = [Environment]::GetFolderPath("Startup")
 $StartupCmdPath = Join-Path $StartupDir "Notify Hub VR.cmd"
 $StartupVbsPath = Join-Path $StartupDir "Notify Hub VR.vbs"
+$LauncherPath = Join-Path $InstallDir "start-notifyhub-hidden.vbs"
+$RunKeyPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+$RunValueName = "Notify Hub VR"
 
 $RunningProcesses = Get-Process -Name NotifyHubVr -ErrorAction SilentlyContinue
 if ($null -ne $RunningProcesses) {
@@ -27,7 +30,15 @@ try {
         Write-Host "Scheduled Task not found: $TaskName"
     }
 } catch {
-    Write-Warning "Could not query or remove Scheduled Task. Continuing with Startup folder cleanup."
+    Write-Warning "Could not query or remove Scheduled Task. Continuing with user autostart cleanup."
+    Write-Warning $_.Exception.Message
+}
+
+try {
+    Remove-ItemProperty -Path $RunKeyPath -Name $RunValueName -ErrorAction SilentlyContinue
+    Write-Host "Removed HKCU Run entry: $RunValueName"
+} catch {
+    Write-Warning "Could not remove HKCU Run entry."
     Write-Warning $_.Exception.Message
 }
 
@@ -44,6 +55,11 @@ if (Test-Path $StartupCmdPath) {
 }
 if (-not $RemovedStartupEntry) {
     Write-Host "Startup folder entry not found."
+}
+
+if (Test-Path $LauncherPath) {
+    Remove-Item -Force $LauncherPath
+    Write-Host "Removed hidden launcher: $LauncherPath"
 }
 
 if ($RemoveFiles) {
