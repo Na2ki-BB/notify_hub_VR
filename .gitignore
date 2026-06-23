@@ -13,3 +13,14 @@ cmd/notify-forwarder/config.json
 cmd/notify-forwarder/state.json
 cmd/notify-forwarder/*.state.json
 /notify-forwarder
+
+# Private local notes and environment files.
+回答
+.env
+.env.*
+*.local
+*.local.*
+*.pem
+*.key
+*.pfx
+*.p12

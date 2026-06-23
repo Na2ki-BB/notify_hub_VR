@@ -147,7 +147,7 @@ Configurable values:
 - Default display duration, initially `5000`.
 - Sound on/off.
 - Notification behavior while one is visible: replace the current notification immediately.
-- LAN auth token: not required for MVP.
+- LAN authentication: not included in the MVP. The HTTP endpoint must be used only on a trusted LAN and must not be exposed to the internet.
 
 ## Implementation Stack Notes
 

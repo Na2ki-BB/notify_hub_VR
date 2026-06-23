@@ -113,8 +113,8 @@ sudo nano /etc/notify-hub-vr-forwarder/config.json
 
 ```json
 {
-  "input_path": "/home/satomi/raspi-esp32-status-panel/hub/data/vrchat.json",
-  "notify_url": "http://192.168.1.14:17890/notify",
+  "input_path": "/home/YOUR_USER/path/to/status-panel/hub/data/vrchat.json",
+  "notify_url": "http://WINDOWS_PC_IP:17890/notify",
   "state_path": "/var/lib/notify-hub-vr-forwarder/state.json"
 }
 ```

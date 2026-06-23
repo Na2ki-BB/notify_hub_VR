@@ -32,18 +32,37 @@ sudo systemctl restart notify-hub-vr-forwarder
 
 ## Windows Notify Hub VR
 
-Scheduled Taskで動かしている場合:
+標準のStartupフォルダ方式で自動起動している場合、登録確認は次の通りです。
+
+PowerShell:
 
 ```powershell
-Get-ScheduledTask -TaskName "Notify Hub VR"
-Get-ScheduledTaskInfo -TaskName "Notify Hub VR"
+Get-ChildItem ([Environment]::GetFolderPath("Startup")) -Filter "Notify Hub VR.cmd"
+```
+
+cmd.exe:
+
+```bat
+dir "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Notify Hub VR.cmd"
+```
+
+起動中か確認:
+
+```powershell
+Get-Process NotifyHubVr -ErrorAction SilentlyContinue
 ```
 
 手動起動・停止:
 
 ```powershell
-Start-ScheduledTask -TaskName "Notify Hub VR"
-Stop-ScheduledTask -TaskName "Notify Hub VR"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\NotifyHubVR\run-notifyhub.ps1"
+Stop-Process -Name NotifyHubVr -ErrorAction SilentlyContinue
+```
+
+cmd.exeで停止する場合:
+
+```bat
+taskkill /IM NotifyHubVr.exe /F
 ```
 
 ログ場所:

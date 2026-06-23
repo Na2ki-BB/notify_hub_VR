@@ -22,7 +22,7 @@ Build the simplest working PCVR notification path:
 - Configurable display duration, defaulting to 5 seconds.
 - Optional notification sound with an off switch.
 - If a new notification arrives while one is visible, replace the current notification immediately. This is sufficient for low volume such as one notification every few minutes.
-- No shared token is required for MVP LAN access.
+- Authentication is not included in the MVP; use it only on a trusted LAN and do not expose the HTTP port to the internet.
 - File-based configuration for MVP. A desktop settings UI can be added later if needed.
 
 ## Suggested First Milestone
