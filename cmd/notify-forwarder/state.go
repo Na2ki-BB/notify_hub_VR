@@ -7,9 +7,11 @@ import (
 )
 
 type State struct {
-	LastEventKey  string `json:"last_event_key"`
-	LastUpdatedAt string `json:"last_updated_at,omitempty"`
-	LastSentAt    string `json:"last_sent_at,omitempty"`
+	LastEventKey   string `json:"last_event_key"`
+	LastUpdatedAt  string `json:"last_updated_at,omitempty"`
+	LastSentAt     string `json:"last_sent_at,omitempty"`
+	LastSkippedAt  string `json:"last_skipped_at,omitempty"`
+	LastSkipReason string `json:"last_skip_reason,omitempty"`
 }
 
 func LoadState(path string) (State, error) {

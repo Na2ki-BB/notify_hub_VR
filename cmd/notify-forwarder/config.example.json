@@ -6,6 +6,7 @@
   "default_duration_ms": 5000,
   "debounce_ms": 120,
   "request_timeout_ms": 5000,
+  "max_notification_age_ms": 30000,
   "retry_initial_interval_ms": 1000,
   "retry_max_interval_ms": 300000,
   "retry_unavailable_initial_interval_ms": 5000,

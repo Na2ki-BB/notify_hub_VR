@@ -68,6 +68,11 @@ func main() {
 	log.Printf("input_path=%s", config.InputPath)
 	log.Printf("notify_url=%s", config.NotifyURL)
 	log.Printf("state_path=%s", config.StatePath)
+	if maxAge := config.MaxNotificationAge(); maxAge > 0 {
+		log.Printf("max_notification_age=%s", maxAge)
+	} else {
+		log.Printf("max_notification_age=disabled")
+	}
 	log.Printf("watching directory=%s file=%s", inputDir, inputBase)
 
 	go watchInput(ctx, watcher, config.InputPath, trigger)

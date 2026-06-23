@@ -22,6 +22,7 @@ type Config struct {
 	RetryUnavailableInitialIntervalMS int    `json:"retry_unavailable_initial_interval_ms"`
 	RetryUnavailableMaxIntervalMS     int    `json:"retry_unavailable_max_interval_ms"`
 	RetryMaxElapsedMS                 int    `json:"retry_max_elapsed_ms"`
+	MaxNotificationAgeMS              *int   `json:"max_notification_age_ms"`
 }
 
 func LoadConfig(path string) (Config, error) {
@@ -70,6 +71,10 @@ func (c Config) withDefaults() Config {
 	}
 	if c.RetryMaxElapsedMS <= 0 {
 		c.RetryMaxElapsedMS = 1800000
+	}
+	if c.MaxNotificationAgeMS == nil {
+		defaultMaxAge := 30000
+		c.MaxNotificationAgeMS = &defaultMaxAge
 	}
 	if c.StatePath == "" && c.InputPath != "" {
 		c.StatePath = c.InputPath + ".notify-forwarder-state.json"
@@ -120,6 +125,16 @@ func (c Config) RetryUnavailableMaxInterval() time.Duration {
 
 func (c Config) RetryMaxElapsed() time.Duration {
 	return time.Duration(c.RetryMaxElapsedMS) * time.Millisecond
+}
+
+func (c Config) MaxNotificationAge() time.Duration {
+	if c.MaxNotificationAgeMS == nil {
+		return 30 * time.Second
+	}
+	if *c.MaxNotificationAgeMS <= 0 {
+		return 0
+	}
+	return time.Duration(*c.MaxNotificationAgeMS) * time.Millisecond
 }
 
 func ensureParentDir(path string) error {

@@ -50,6 +50,7 @@ cp cmd/notify-forwarder/config.example.json cmd/notify-forwarder/config.json
   "default_duration_ms": 5000,
   "debounce_ms": 120,
   "request_timeout_ms": 5000,
+  "max_notification_age_ms": 30000,
   "retry_initial_interval_ms": 1000,
   "retry_max_interval_ms": 300000,
   "retry_unavailable_initial_interval_ms": 5000,
@@ -64,6 +65,7 @@ cp cmd/notify-forwarder/config.example.json cmd/notify-forwarder/config.json
 - `notify_url`: Windows側Notify Hub VRの `/notify` URL。
 - `state_path`: 最後に通知済みのイベントキーを保存するファイル。
 - `debounce_ms`: ファイル更新イベント後、読み込む前に待つ時間。atomic rename直後の揺れを吸収します。
+- `max_notification_age_ms`: ファイル更新時刻からこの時間を過ぎた通知は送らずに捨てます。初期値は30秒です。`0` 以下にすると無効化します。
 - `retry_max_interval_ms`: ネットワークtimeoutなど通常失敗時の最大retry間隔。初期値は5分です。
 - `retry_unavailable_initial_interval_ms`: Windows側が503を返したときの初回retry間隔。HMD未接続など一時的なOpenVR準備待ちを想定しています。
 - `retry_unavailable_max_interval_ms`: Windows側が503を返したときの最大retry間隔。初期値は30秒です。
@@ -161,6 +163,7 @@ sudo systemctl restart notify-hub-vr-forwarder
 - 対象ファイルのcreate/write/rename/chmodを検知したらJSONを読みます。
 - 同じイベントキーは再通知しません。
 - 送信失敗時は指数バックオフでリトライします。Windows側が503を返す場合は、HMD接続待ちとして短めの間隔でリトライします。
+- ファイル更新から `max_notification_age_ms` を過ぎた通知は、古いリアルタイム通知として送らずに捨てます。
 - リトライ中に新しいファイル更新が来た場合、古い通知をキャンセルして最新を優先します。
 - JSONファイル本体は削除、移動、書き換えしません。
 

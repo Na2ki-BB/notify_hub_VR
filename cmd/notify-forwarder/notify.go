@@ -20,6 +20,17 @@ func SendWithRetry(ctx context.Context, config Config, snapshot InputSnapshot) (
 	attempt := 1
 
 	for {
+		if stale, age, maxAge := snapshot.StaleStatus(config, time.Now()); stale {
+			now := time.Now()
+			log.Printf("drop stale notification: updated_at=%s age=%s max_age=%s body=%q", snapshot.UpdatedAt, age.Round(time.Millisecond), maxAge, snapshot.Notification.Body)
+			return State{
+				LastEventKey:   snapshot.EventKey,
+				LastUpdatedAt:  snapshot.UpdatedAt,
+				LastSkippedAt:  now.Format(time.RFC3339Nano),
+				LastSkipReason: "stale",
+			}, nil
+		}
+
 		err := SendNotification(ctx, config, snapshot.Notification)
 		if err == nil {
 			log.Printf("notification sent: updated_at=%s body=%q", snapshot.UpdatedAt, snapshot.Notification.Body)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 type SourceEvent struct {
@@ -25,6 +26,7 @@ type NotifyRequest struct {
 type InputSnapshot struct {
 	EventKey     string
 	UpdatedAt    string
+	ModTime      time.Time
 	Source       SourceEvent
 	Notification NotifyRequest
 }
@@ -56,9 +58,23 @@ func ReadInputSnapshot(config Config) (InputSnapshot, error) {
 	return InputSnapshot{
 		EventKey:     eventKey,
 		UpdatedAt:    source.UpdatedAt,
+		ModTime:      info.ModTime(),
 		Source:       source,
 		Notification: notification,
 	}, nil
+}
+
+func (s InputSnapshot) StaleStatus(config Config, now time.Time) (bool, time.Duration, time.Duration) {
+	maxAge := config.MaxNotificationAge()
+	if maxAge <= 0 || s.ModTime.IsZero() {
+		return false, 0, maxAge
+	}
+
+	age := now.Sub(s.ModTime)
+	if age < 0 {
+		return false, age, maxAge
+	}
+	return age > maxAge, age, maxAge
 }
 
 func BuildNotification(source SourceEvent, config Config) (NotifyRequest, error) {
