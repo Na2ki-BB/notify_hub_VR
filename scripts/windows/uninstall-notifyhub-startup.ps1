@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 
 $StartupDir = [Environment]::GetFolderPath("Startup")
 $StartupCmdPath = Join-Path $StartupDir "Notify Hub VR.cmd"
+$StartupVbsPath = Join-Path $StartupDir "Notify Hub VR.vbs"
 
 $RunningProcesses = Get-Process -Name NotifyHubVr -ErrorAction SilentlyContinue
 if ($null -ne $RunningProcesses) {
@@ -30,11 +31,19 @@ try {
     Write-Warning $_.Exception.Message
 }
 
+$RemovedStartupEntry = $false
+if (Test-Path $StartupVbsPath) {
+    Remove-Item -Force $StartupVbsPath
+    Write-Host "Removed Startup folder entry: $StartupVbsPath"
+    $RemovedStartupEntry = $true
+}
 if (Test-Path $StartupCmdPath) {
     Remove-Item -Force $StartupCmdPath
-    Write-Host "Removed Startup folder entry: $StartupCmdPath"
-} else {
-    Write-Host "Startup folder entry not found: $StartupCmdPath"
+    Write-Host "Removed legacy Startup folder entry: $StartupCmdPath"
+    $RemovedStartupEntry = $true
+}
+if (-not $RemovedStartupEntry) {
+    Write-Host "Startup folder entry not found."
 }
 
 if ($RemoveFiles) {

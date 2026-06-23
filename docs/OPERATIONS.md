@@ -37,16 +37,16 @@ sudo systemctl restart notify-hub-vr-forwarder
 PowerShell:
 
 ```powershell
-Get-ChildItem ([Environment]::GetFolderPath("Startup")) -Filter "Notify Hub VR.cmd"
+Get-ChildItem ([Environment]::GetFolderPath("Startup")) -Filter "Notify Hub VR.vbs"
 ```
 
 cmd.exe:
 
 ```bat
-dir "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Notify Hub VR.cmd"
+dir "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Notify Hub VR.vbs"
 ```
 
-起動中か確認:
+PowerShellウィンドウは表示されません。起動中か確認:
 
 ```powershell
 Get-Process NotifyHubVr -ErrorAction SilentlyContinue

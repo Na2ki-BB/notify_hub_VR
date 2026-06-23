@@ -16,6 +16,7 @@ $ConfigPath = Join-Path $InstallDir "config.openvr.json"
 $RunnerPath = Join-Path $InstallDir "run-notifyhub.ps1"
 $StartupDir = [Environment]::GetFolderPath("Startup")
 $StartupCmdPath = Join-Path $StartupDir "Notify Hub VR.cmd"
+$StartupVbsPath = Join-Path $StartupDir "Notify Hub VR.vbs"
 $PowerShellExe = (Get-Command powershell.exe).Source
 
 if ($UseStartupFolder) {
@@ -95,22 +96,31 @@ exit $LASTEXITCODE
 '@
 Set-Content -Path $RunnerPath -Value $Runner -Encoding UTF8
 
+function ConvertTo-VbsString([string]$Value) {
+    return $Value.Replace('"', '""')
+}
+
 function Install-StartupFolderEntry {
     New-Item -ItemType Directory -Force -Path $StartupDir | Out-Null
-    $StartupCommand = @"
-@echo off
-start "Notify Hub VR" /min "$PowerShellExe" -NoProfile -ExecutionPolicy Bypass -File "$RunnerPath"
+    $PowerShellForVbs = ConvertTo-VbsString $PowerShellExe
+    $RunnerForVbs = ConvertTo-VbsString $RunnerPath
+    $StartupScript = @"
+Set shell = CreateObject("WScript.Shell")
+shell.Run """$PowerShellForVbs"" -NoProfile -ExecutionPolicy Bypass -File ""$RunnerForVbs""", 0, False
 "@
-    Set-Content -Path $StartupCmdPath -Value $StartupCommand -Encoding ASCII
-    Write-Host "Registered Startup folder entry: $StartupCmdPath"
+    Set-Content -Path $StartupVbsPath -Value $StartupScript -Encoding Unicode
+    if (Test-Path $StartupCmdPath) {
+        Remove-Item -Force $StartupCmdPath
+    }
+    Write-Host "Registered hidden Startup folder entry: $StartupVbsPath"
 }
 
 function Start-NotifyHubDirectly {
     Start-Process -FilePath $PowerShellExe `
         -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $RunnerPath) `
         -WorkingDirectory $InstallDir `
-        -WindowStyle Minimized
-    Write-Host "Started Notify Hub VR directly."
+        -WindowStyle Hidden
+    Write-Host "Started Notify Hub VR directly in the background."
 }
 
 $RegisteredTask = $false
@@ -143,6 +153,9 @@ if ($UseScheduledTask) {
         $RegisteredTask = $true
         if (Test-Path $StartupCmdPath) {
             Remove-Item -Force $StartupCmdPath
+        }
+        if (Test-Path $StartupVbsPath) {
+            Remove-Item -Force $StartupVbsPath
         }
         Write-Host "Registered Scheduled Task: $TaskName"
     } catch {
@@ -179,5 +192,5 @@ Write-Host "Useful commands:"
 Write-Host "  Stop-Process -Name NotifyHubVr -ErrorAction SilentlyContinue # PowerShell"
 Write-Host "  taskkill /IM NotifyHubVr.exe /F                         # cmd.exe"
 Write-Host "  Get-Content -Tail 80 -Wait '$LogDir\notifyhub-*.log'"
-Write-Host "  Startup folder file: $StartupCmdPath"
+Write-Host "  Startup folder file: $StartupVbsPath"
 Write-Host "  Use -UseScheduledTask only if you intentionally want Task Scheduler registration."

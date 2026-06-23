@@ -2,7 +2,7 @@
 
 Windows側のNotify Hub VRをログオン時に自動起動するための手順です。
 
-標準では、現在ユーザーのStartupフォルダに起動用 `.cmd` を作成します。これは管理者権限なしで動き、WindowsにログオンしたときにNotify Hub VRを自動起動します。毎回コマンドを打つ必要はありません。
+標準では、現在ユーザーのStartupフォルダに起動用 `.vbs` を作成します。これは管理者権限なしで動き、WindowsにログオンしたときにNotify Hub VRを非表示で自動起動します。毎回コマンドを打つ必要はありません。
 
 SteamVR/OpenVR overlayはログイン中のデスクトップセッションで動かす必要があります。そのため、Windows Serviceではなく、ログオン後に通常アプリとして起動します。
 
@@ -24,7 +24,7 @@ cd /d C:\Users\YOUR_USER\notify_hub_VR
 powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub-startup.ps1 -StartNow
 ```
 
-`-StartNow` を付けると、インストール後にその場でNotify Hub VRを起動します。次回以降はWindowsログオン時にStartupフォルダから自動起動します。
+`-StartNow` を付けると、インストール後にその場でNotify Hub VRを非表示で起動します。次回以降はWindowsログオン時にStartupフォルダから非表示で自動起動します。
 
 スクリプトは次の処理をします。
 
@@ -33,7 +33,7 @@ powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub
 - `%LOCALAPPDATA%\NotifyHubVR\app` にアプリを配置
 - SteamVRの `openvr_api.dll` をpublish先にコピー
 - `%LOCALAPPDATA%\NotifyHubVR\config.openvr.json` を作成
-- Startupフォルダに `Notify Hub VR.cmd` を作成
+- Startupフォルダに `Notify Hub VR.vbs` を作成
 - ログを `%LOCALAPPDATA%\NotifyHubVR\logs` に出力
 
 `%LOCALAPPDATA%\NotifyHubVR\config.openvr.json` がすでにある場合は上書きしません。
@@ -45,16 +45,16 @@ Startupフォルダに登録されているか確認します。
 PowerShell:
 
 ```powershell
-Get-ChildItem ([Environment]::GetFolderPath("Startup")) -Filter "Notify Hub VR.cmd"
+Get-ChildItem ([Environment]::GetFolderPath("Startup")) -Filter "Notify Hub VR.vbs"
 ```
 
 cmd.exe:
 
 ```bat
-dir "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Notify Hub VR.cmd"
+dir "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Notify Hub VR.vbs"
 ```
 
-起動中か確認します。
+PowerShellウィンドウは表示されません。起動中かどうかはプロセスまたはログで確認します。
 
 PowerShell:
 
@@ -68,7 +68,7 @@ cmd.exe:
 tasklist /FI "IMAGENAME eq NotifyHubVr.exe"
 ```
 
-手動起動が必要な場合:
+手動起動が必要な場合。このコマンドは起動中のPowerShellをその場に残すため、通常運用ではinstall scriptを使ってください。
 
 PowerShell:
 
