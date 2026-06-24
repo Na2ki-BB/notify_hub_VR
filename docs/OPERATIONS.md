@@ -46,23 +46,24 @@ Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Na
 Get-Content -Tail 80 "$env:LOCALAPPDATA\NotifyHubVR\logs\startup-launch.log"
 ```
 
-PowerShellウィンドウは表示されません。起動中か確認:
+PowerShellウィンドウは使いません。起動中か確認:
 
 ```powershell
-Get-Process NotifyHubVr -ErrorAction SilentlyContinue
+Get-Process NotifyHubVr,NotifyHubVr.Launcher -ErrorAction SilentlyContinue
 ```
 
 手動起動・停止:
 
 ```powershell
-wscript.exe //B //Nologo "$env:LOCALAPPDATA\NotifyHubVR\start-notifyhub-hidden.vbs"
-Stop-Process -Name NotifyHubVr -ErrorAction SilentlyContinue
+& "$env:LOCALAPPDATA\NotifyHubVR\launcher\NotifyHubVr.Launcher.exe" "$env:LOCALAPPDATA\NotifyHubVR\app\NotifyHubVr.exe" "$env:LOCALAPPDATA\NotifyHubVR\config.openvr.json" "$env:LOCALAPPDATA\NotifyHubVR\logs"
+Stop-Process -Name NotifyHubVr,NotifyHubVr.Launcher -ErrorAction SilentlyContinue
 ```
 
 cmd.exeで停止する場合:
 
 ```bat
 taskkill /IM NotifyHubVr.exe /F
+taskkill /IM NotifyHubVr.Launcher.exe /F
 ```
 
 ログ場所:

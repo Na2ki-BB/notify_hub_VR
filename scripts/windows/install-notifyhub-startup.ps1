@@ -10,21 +10,38 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $ProjectPath = Join-Path $RepoRoot "src\NotifyHubVr"
+$LauncherProjectPath = Join-Path $RepoRoot "src\NotifyHubVr.Launcher"
 $AppDir = Join-Path $InstallDir "app"
+$LauncherDir = Join-Path $InstallDir "launcher"
 $LogDir = Join-Path $InstallDir "logs"
 $ConfigPath = Join-Path $InstallDir "config.openvr.json"
-$RunnerPath = Join-Path $InstallDir "run-notifyhub.ps1"
-$LauncherPath = Join-Path $InstallDir "start-notifyhub-hidden.vbs"
+$AppExe = Join-Path $AppDir "NotifyHubVr.exe"
+$LauncherExe = Join-Path $LauncherDir "NotifyHubVr.Launcher.exe"
+$LegacyRunnerPath = Join-Path $InstallDir "run-notifyhub.ps1"
+$LegacyVbsPath = Join-Path $InstallDir "start-notifyhub-hidden.vbs"
 $StartupDir = [Environment]::GetFolderPath("Startup")
 $StartupCmdPath = Join-Path $StartupDir "Notify Hub VR.cmd"
 $StartupVbsPath = Join-Path $StartupDir "Notify Hub VR.vbs"
 $RunKeyPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $RunValueName = "Notify Hub VR"
-$PowerShellExe = (Get-Command powershell.exe).Source
-$WScriptExe = (Get-Command wscript.exe).Source
 
-function ConvertTo-VbsString([string]$Value) {
-    return $Value.Replace('"', '""')
+function Get-LauncherArguments {
+    return @("`"$AppExe`"", "`"$ConfigPath`"", "`"$LogDir`"")
+}
+
+function Get-LauncherCommandLine {
+    return "`"$LauncherExe`" `"$AppExe`" `"$ConfigPath`" `"$LogDir`""
+}
+
+function Stop-NotifyHubProcesses {
+    foreach ($ProcessName in @("NotifyHubVr", "NotifyHubVr.Launcher")) {
+        $Processes = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+        if ($null -ne $Processes) {
+            Write-Host "Stopping running process: $ProcessName"
+            $Processes | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+    }
+    Start-Sleep -Seconds 2
 }
 
 function Remove-StartupFolderEntries {
@@ -61,37 +78,93 @@ function Remove-ScheduledTaskIfPresent {
     }
 }
 
-$RunningProcesses = Get-Process -Name NotifyHubVr -ErrorAction SilentlyContinue
-if ($null -ne $RunningProcesses) {
-    Write-Host "Stopping running NotifyHubVr process before publishing."
-    $RunningProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
+function Remove-LegacyLaunchers {
+    foreach ($LegacyPath in @($LegacyRunnerPath, $LegacyVbsPath)) {
+        if (Test-Path $LegacyPath) {
+            Remove-Item -Force $LegacyPath
+            Write-Host "Removed legacy launcher file: $LegacyPath"
+        }
+    }
 }
 
-if ($UseScheduledTask) {
-    try {
-        $ExistingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-        if ($null -ne $ExistingTask) {
-            Write-Host "Stopping existing Scheduled Task before publishing: $TaskName"
-            Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 2
-        }
-    } catch {
-        Write-Warning "Could not query or stop the existing Scheduled Task. Continuing with publish."
-        Write-Warning $_.Exception.Message
+function Publish-Project([string]$Project, [string]$OutputDir, [string]$Label) {
+    Write-Host "Publishing $Label to $OutputDir"
+    New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+    dotnet publish $Project -c Release -o $OutputDir
+    if ($LASTEXITCODE -ne 0) {
+        throw "dotnet publish failed for $Label with exit code $LASTEXITCODE."
     }
-} else {
+}
+
+function Register-RunKeyEntry {
+    New-Item -Path $RunKeyPath -Force | Out-Null
+    Set-ItemProperty -Path $RunKeyPath -Name $RunValueName -Value (Get-LauncherCommandLine)
+    Remove-StartupFolderEntries
+    Write-Host "Registered HKCU Run entry: $RunValueName"
+}
+
+function Install-StartupFolderEntry {
+    New-Item -ItemType Directory -Force -Path $StartupDir | Out-Null
+    $StartupCommand = @"
+@echo off
+start "Notify Hub VR" "$LauncherExe" "$AppExe" "$ConfigPath" "$LogDir"
+"@
+    Set-Content -Path $StartupCmdPath -Value $StartupCommand -Encoding ASCII
+    if (Test-Path $StartupVbsPath) {
+        Remove-Item -Force $StartupVbsPath
+    }
+    Remove-RunKeyEntry
+    Write-Host "Registered Startup folder entry: $StartupCmdPath"
+}
+
+function Register-ScheduledTaskEntry {
+    Remove-RunKeyEntry
+    Remove-StartupFolderEntries
+    $Action = New-ScheduledTaskAction `
+        -Execute $LauncherExe `
+        -Argument "`"$AppExe`" `"$ConfigPath`" `"$LogDir`"" `
+        -WorkingDirectory $InstallDir
+    $Trigger = New-ScheduledTaskTrigger -AtLogOn
+    $Principal = New-ScheduledTaskPrincipal `
+        -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
+        -LogonType Interactive `
+        -RunLevel Limited
+    $Settings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries `
+        -ExecutionTimeLimit (New-TimeSpan -Seconds 0) `
+        -MultipleInstances IgnoreNew `
+        -RestartCount 3 `
+        -RestartInterval (New-TimeSpan -Minutes 1)
+
+    Register-ScheduledTask `
+        -TaskName $TaskName `
+        -Action $Action `
+        -Trigger $Trigger `
+        -Principal $Principal `
+        -Settings $Settings `
+        -Force | Out-Null
+    Write-Host "Registered Scheduled Task: $TaskName"
+}
+
+function Start-NotifyHubInBackground {
+    Start-Process -FilePath $LauncherExe `
+        -ArgumentList (Get-LauncherArguments) `
+        -WorkingDirectory $InstallDir `
+        -WindowStyle Hidden
+    Write-Host "Started Notify Hub VR through launcher."
+}
+
+Stop-NotifyHubProcesses
+Remove-LegacyLaunchers
+
+if (-not $UseScheduledTask) {
     Remove-ScheduledTaskIfPresent
 }
 
-Write-Host "Publishing Notify Hub VR to $AppDir"
-New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
-
-dotnet publish $ProjectPath -c Release -o $AppDir
-if ($LASTEXITCODE -ne 0) {
-    throw "dotnet publish failed with exit code $LASTEXITCODE."
-}
+Publish-Project $ProjectPath $AppDir "Notify Hub VR"
+Publish-Project $LauncherProjectPath $LauncherDir "Notify Hub VR launcher"
 
 $ProgramFilesX86 = ${env:ProgramFiles(x86)}
 if ([string]::IsNullOrWhiteSpace($ProgramFilesX86)) {
@@ -121,111 +194,9 @@ if (-not (Test-Path $ConfigPath)) {
     Write-Host "Keeping existing config at $ConfigPath"
 }
 
-$Runner = @'
-$ErrorActionPreference = "Stop"
-$BaseDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$AppPath = Join-Path $BaseDir "app\NotifyHubVr.exe"
-$ConfigPath = Join-Path $BaseDir "config.openvr.json"
-$LogDir = Join-Path $BaseDir "logs"
-New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
-$LogPath = Join-Path $LogDir ("notifyhub-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
-"[$(Get-Date -Format o)] Starting Notify Hub VR" | Out-File -FilePath $LogPath -Encoding utf8 -Append
-& $AppPath $ConfigPath *>> $LogPath
-"[$(Get-Date -Format o)] Notify Hub VR exited with code $LASTEXITCODE" | Out-File -FilePath $LogPath -Encoding utf8 -Append
-exit $LASTEXITCODE
-'@
-Set-Content -Path $RunnerPath -Value $Runner -Encoding UTF8
-
-function Write-HiddenLauncher {
-    $PowerShellForVbs = ConvertTo-VbsString $PowerShellExe
-    $RunnerForVbs = ConvertTo-VbsString $RunnerPath
-    $LogDirForVbs = ConvertTo-VbsString $LogDir
-    $StartupLogForVbs = ConvertTo-VbsString (Join-Path $LogDir "startup-launch.log")
-    $Launcher = @"
-Option Explicit
-Dim shell, fso, logDir, logPath, command
-Set shell = CreateObject("WScript.Shell")
-Set fso = CreateObject("Scripting.FileSystemObject")
-logDir = "$LogDirForVbs"
-logPath = "$StartupLogForVbs"
-If Not fso.FolderExists(logDir) Then
-  fso.CreateFolder(logDir)
-End If
-AppendLog "launcher invoked"
-command = """$PowerShellForVbs"" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$RunnerForVbs"""
-AppendLog "starting runner"
-shell.Run command, 0, False
-
-Sub AppendLog(message)
-  Dim file
-  Set file = fso.OpenTextFile(logPath, 8, True)
-  file.WriteLine Now & " " & message
-  file.Close
-End Sub
-"@
-    Set-Content -Path $LauncherPath -Value $Launcher -Encoding Unicode
-    Write-Host "Wrote hidden launcher: $LauncherPath"
-}
-
-function Register-RunKeyEntry {
-    New-Item -Path $RunKeyPath -Force | Out-Null
-    $RunCommand = "`"$WScriptExe`" //B //Nologo `"$LauncherPath`""
-    Set-ItemProperty -Path $RunKeyPath -Name $RunValueName -Value $RunCommand
-    Remove-StartupFolderEntries
-    Write-Host "Registered HKCU Run entry: $RunValueName"
-}
-
-function Install-StartupFolderEntry {
-    New-Item -ItemType Directory -Force -Path $StartupDir | Out-Null
-    Copy-Item -Force $LauncherPath $StartupVbsPath
-    Remove-RunKeyEntry
-    if (Test-Path $StartupCmdPath) {
-        Remove-Item -Force $StartupCmdPath
-    }
-    Write-Host "Registered Startup folder entry: $StartupVbsPath"
-}
-
-function Start-NotifyHubInBackground {
-    Start-Process -FilePath $WScriptExe `
-        -ArgumentList @("//B", "//Nologo", $LauncherPath) `
-        -WorkingDirectory $InstallDir `
-        -WindowStyle Hidden
-    Write-Host "Started Notify Hub VR through hidden launcher."
-}
-
-Write-HiddenLauncher
-
-$RegisteredTask = $false
 if ($UseScheduledTask) {
-    Remove-RunKeyEntry
-    Remove-StartupFolderEntries
-    $Action = New-ScheduledTaskAction `
-        -Execute $WScriptExe `
-        -Argument "//B //Nologo `"$LauncherPath`"" `
-        -WorkingDirectory $InstallDir
-    $Trigger = New-ScheduledTaskTrigger -AtLogOn
-    $Principal = New-ScheduledTaskPrincipal `
-        -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
-        -LogonType Interactive `
-        -RunLevel Limited
-    $Settings = New-ScheduledTaskSettingsSet `
-        -AllowStartIfOnBatteries `
-        -DontStopIfGoingOnBatteries `
-        -ExecutionTimeLimit (New-TimeSpan -Seconds 0) `
-        -MultipleInstances IgnoreNew `
-        -RestartCount 3 `
-        -RestartInterval (New-TimeSpan -Minutes 1)
-
     try {
-        Register-ScheduledTask `
-            -TaskName $TaskName `
-            -Action $Action `
-            -Trigger $Trigger `
-            -Principal $Principal `
-            -Settings $Settings `
-            -Force | Out-Null
-        $RegisteredTask = $true
-        Write-Host "Registered Scheduled Task: $TaskName"
+        Register-ScheduledTaskEntry
     } catch {
         Write-Warning "Register-ScheduledTask failed. Falling back to HKCU Run entry."
         Write-Warning $_.Exception.Message
@@ -241,29 +212,20 @@ if ($UseScheduledTask) {
 Write-Host "InstallDir: $InstallDir"
 Write-Host "Config: $ConfigPath"
 Write-Host "Logs: $LogDir"
+Write-Host "Launcher: $LauncherExe"
 
 if ($StartNow) {
-    if ($RegisteredTask) {
-        try {
-            Start-ScheduledTask -TaskName $TaskName
-            Write-Host "Started Scheduled Task: $TaskName"
-        } catch {
-            Write-Warning "Start-ScheduledTask failed. Starting Notify Hub VR through hidden launcher."
-            Write-Warning $_.Exception.Message
-            Start-NotifyHubInBackground
-        }
-    } else {
-        Start-NotifyHubInBackground
-    }
+    Start-NotifyHubInBackground
 }
 
 Write-Host ""
 Write-Host "Useful commands:"
 Write-Host "  Get-ItemProperty -Path '$RunKeyPath' -Name '$RunValueName'"
 Write-Host "  Get-Process NotifyHubVr -ErrorAction SilentlyContinue"
-Write-Host "  Stop-Process -Name NotifyHubVr -ErrorAction SilentlyContinue # PowerShell"
+Write-Host "  Get-Process NotifyHubVr.Launcher -ErrorAction SilentlyContinue"
+Write-Host "  Stop-Process -Name NotifyHubVr,NotifyHubVr.Launcher -ErrorAction SilentlyContinue # PowerShell"
 Write-Host "  taskkill /IM NotifyHubVr.exe /F                         # cmd.exe"
+Write-Host "  taskkill /IM NotifyHubVr.Launcher.exe /F                # cmd.exe"
 Write-Host "  Get-Content -Tail 80 -Wait '$LogDir\notifyhub-*.log'"
 Write-Host "  Get-Content -Tail 80 '$LogDir\startup-launch.log'"
-Write-Host "  Hidden launcher: $LauncherPath"
 Write-Host "  Use -UseScheduledTask only if you intentionally want Task Scheduler registration."

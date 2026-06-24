@@ -2,7 +2,7 @@
 
 Windows側のNotify Hub VRをログオン時に自動起動するための手順です。
 
-標準では、現在ユーザーのRun registry (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`) に非表示ランチャーを登録します。これは管理者権限なしで動き、WindowsユーザーがログオンしたときにNotify Hub VRを非表示で自動起動します。毎回コマンドを打つ必要はありません。
+標準では、現在ユーザーのRun registry (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`) に専用launcher exeを登録します。これは管理者権限なしで動き、WindowsユーザーがログオンしたときにNotify Hub VRを自動起動します。毎回コマンドを打つ必要はありません。
 
 SteamVR/OpenVR overlayはログイン中のデスクトップセッションで動かす必要があります。そのため、Windows Serviceではなく、ログオン後に通常アプリとして起動します。
 
@@ -24,7 +24,7 @@ cd /d C:\Users\YOUR_USER\notify_hub_VR
 powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub-startup.ps1 -StartNow
 ```
 
-`-StartNow` を付けると、インストール後にその場でNotify Hub VRを非表示で起動します。次回以降はWindowsユーザーのログオン時にRun registryから非表示で自動起動します。
+`-StartNow` を付けると、インストール後にその場でNotify Hub VRをlauncher exe経由で起動します。次回以降はWindowsユーザーのログオン時にRun registryから自動起動します。
 
 スクリプトは次の処理をします。
 
@@ -33,7 +33,7 @@ powershell.exe -ExecutionPolicy Bypass -File .\scripts\windows\install-notifyhub
 - `%LOCALAPPDATA%\NotifyHubVR\app` にアプリを配置
 - SteamVRの `openvr_api.dll` をpublish先にコピー
 - `%LOCALAPPDATA%\NotifyHubVR\config.openvr.json` を作成
-- `%LOCALAPPDATA%\NotifyHubVR\start-notifyhub-hidden.vbs` を作成
+- `%LOCALAPPDATA%\NotifyHubVR\launcher\NotifyHubVr.Launcher.exe` を作成
 - 現在ユーザーのRun registryに `Notify Hub VR` を登録
 - ログを `%LOCALAPPDATA%\NotifyHubVR\logs` に出力
 
@@ -52,35 +52,36 @@ Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Na
 起動ランチャーが存在するか確認します。
 
 ```powershell
-Test-Path "$env:LOCALAPPDATA\NotifyHubVR\start-notifyhub-hidden.vbs"
+Test-Path "$env:LOCALAPPDATA\NotifyHubVR\launcher\NotifyHubVr.Launcher.exe"
 ```
 
-PowerShellウィンドウは表示されません。起動中かどうかはプロセスまたはログで確認します。ランチャーがログオン時に呼ばれたかは `startup-launch.log` で確認できます。
+PowerShellウィンドウは使いません。起動中かどうかはプロセスまたはログで確認します。ランチャーがログオン時に呼ばれたかは `startup-launch.log` で確認できます。
 
 PowerShell:
 
 ```powershell
-Get-Process NotifyHubVr -ErrorAction SilentlyContinue
+Get-Process NotifyHubVr,NotifyHubVr.Launcher -ErrorAction SilentlyContinue
 ```
 
 cmd.exe:
 
 ```bat
 tasklist /FI "IMAGENAME eq NotifyHubVr.exe"
+tasklist /FI "IMAGENAME eq NotifyHubVr.Launcher.exe"
 ```
 
-手動起動が必要な場合は、非表示ランチャーを呼びます。
+手動起動が必要な場合は、launcher exeを呼びます。
 
 PowerShell:
 
 ```powershell
-wscript.exe //B //Nologo "$env:LOCALAPPDATA\NotifyHubVR\start-notifyhub-hidden.vbs"
+& "$env:LOCALAPPDATA\NotifyHubVR\launcher\NotifyHubVr.Launcher.exe" "$env:LOCALAPPDATA\NotifyHubVR\app\NotifyHubVr.exe" "$env:LOCALAPPDATA\NotifyHubVR\config.openvr.json" "$env:LOCALAPPDATA\NotifyHubVR\logs"
 ```
 
 cmd.exe:
 
 ```bat
-wscript.exe //B //Nologo "%LOCALAPPDATA%\NotifyHubVR\start-notifyhub-hidden.vbs"
+"%LOCALAPPDATA%\NotifyHubVR\launcher\NotifyHubVr.Launcher.exe" "%LOCALAPPDATA%\NotifyHubVR\app\NotifyHubVr.exe" "%LOCALAPPDATA%\NotifyHubVR\config.openvr.json" "%LOCALAPPDATA%\NotifyHubVR\logs"
 ```
 
 停止:
@@ -88,13 +89,14 @@ wscript.exe //B //Nologo "%LOCALAPPDATA%\NotifyHubVR\start-notifyhub-hidden.vbs"
 PowerShell:
 
 ```powershell
-Stop-Process -Name NotifyHubVr -ErrorAction SilentlyContinue
+Stop-Process -Name NotifyHubVr,NotifyHubVr.Launcher -ErrorAction SilentlyContinue
 ```
 
 cmd.exe:
 
 ```bat
 taskkill /IM NotifyHubVr.exe /F
+taskkill /IM NotifyHubVr.Launcher.exe /F
 ```
 
 ログ確認:

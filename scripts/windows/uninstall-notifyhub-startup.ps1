@@ -9,13 +9,15 @@ $ErrorActionPreference = "Stop"
 $StartupDir = [Environment]::GetFolderPath("Startup")
 $StartupCmdPath = Join-Path $StartupDir "Notify Hub VR.cmd"
 $StartupVbsPath = Join-Path $StartupDir "Notify Hub VR.vbs"
+$LegacyRunnerPath = Join-Path $InstallDir "run-notifyhub.ps1"
 $LauncherPath = Join-Path $InstallDir "start-notifyhub-hidden.vbs"
+$LauncherDir = Join-Path $InstallDir "launcher"
 $RunKeyPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $RunValueName = "Notify Hub VR"
 
-$RunningProcesses = Get-Process -Name NotifyHubVr -ErrorAction SilentlyContinue
+$RunningProcesses = Get-Process -Name NotifyHubVr,NotifyHubVr.Launcher -ErrorAction SilentlyContinue
 if ($null -ne $RunningProcesses) {
-    Write-Host "Stopping running NotifyHubVr process."
+    Write-Host "Stopping running Notify Hub VR processes."
     $RunningProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
 }
@@ -57,9 +59,11 @@ if (-not $RemovedStartupEntry) {
     Write-Host "Startup folder entry not found."
 }
 
-if (Test-Path $LauncherPath) {
-    Remove-Item -Force $LauncherPath
-    Write-Host "Removed hidden launcher: $LauncherPath"
+foreach ($LegacyPath in @($LegacyRunnerPath, $LauncherPath)) {
+    if (Test-Path $LegacyPath) {
+        Remove-Item -Force $LegacyPath
+        Write-Host "Removed legacy launcher file: $LegacyPath"
+    }
 }
 
 if ($RemoveFiles) {
